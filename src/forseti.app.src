@@ -1,0 +1,8 @@
+{application, forseti, [
+    {description, "An Erlang Balancer and Process Distributor"},
+    {vsn, "semver"},
+    {registered, []},
+    {applications, [kernel, stdlib, gen_leader]},
+    {mod, {forseti_app, []}},
+    {env, []}
+]}.
