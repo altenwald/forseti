@@ -14,9 +14,7 @@
     get_less_used_node/0,
     search_key/1,
     get_metrics/0,
-    get_key/1,
-
-    setter_all_key/2
+    get_key/1
 ]).
 
 -export([
@@ -81,9 +79,6 @@ get_metrics() ->
 
 get_key(Key) ->
     gen_leader:call(?MODULE, {get_key, Key}).
-
-setter_all_key(Var, Value) ->
-    gen_leader:call(?MODULE, {setter_all_key, Var, Value}).
 
 %% ------------------------------------------------------------------
 %% gen_leader Function Definitions
@@ -203,12 +198,6 @@ init([{Module,Function,Args}, Nodes]) ->
         module=Module,
         function=Function,
         args=Args}}.
-
-handle_call({setter_all_key, Var, Value}, _From, #state{module=Module, keys=Keys}=State, _Election) ->
-    {reply, dict:fold(fun(_Key, {_Node,PID}, Acc) ->
-        catch Module:setter(PID, Var, Value),
-        Acc + 1
-    end, 0, Keys), State};
 
 handle_call(get_metrics, _From, #state{node_keys=NK}=State, _Election) ->
     {reply, dict:to_list(NK), State};
