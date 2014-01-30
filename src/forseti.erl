@@ -39,17 +39,21 @@
     nodes :: [atom()],
     keys = dict:new() :: dict(),
     node_keys = dict:new() :: dict(),
-    module :: atom()
+    module :: atom(),
+    function :: atom(),
+    args :: [any()]
 }).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
--spec start_link(Nodes::[atom()]) -> {ok, pid()} | {error, term()}.
+-spec start_link(
+    {Module :: atom(), Function :: atom(), Args :: [any()]},
+    Nodes::[atom()]) -> {ok, pid()} | {error, term()}.
 
-start_link(Nodes) ->
-    lager:debug("Configuring gen_leader with nodes: ~p~n", [Nodes]),
+start_link({_M,_F,_A}=Launch, Nodes) ->
+    lager:debug("Configuring gen_leader with nodes: ~p~n", [Launch,Nodes]),
     gen_leader:start_link(?SERVER, Nodes, [], ?MODULE, [Nodes], []).
 
 -spec stop() -> ok.
@@ -116,7 +120,9 @@ handle_leader_cast({search, Key, From}, #state{keys=Keys}=State, _Election) ->
         {noreply, State}
     end;
 
-handle_leader_cast({get_key,Key,From}, #state{keys=Keys, node_keys=NK, nodes=Nodes}=State, _Election) ->
+handle_leader_cast({get_key,Key,From}, #state{
+        keys=Keys, node_keys=NK, nodes=Nodes,
+        module=Module, function=Function, args=Args}=State, _Election) ->
     lager:debug("search in leader for getting ~p from ~p~n", [Key, From]),
     {Node,PID} = case dict:find(Key, Keys) of
         error -> {undefined, undefined};
@@ -129,12 +135,13 @@ handle_leader_cast({get_key,Key,From}, #state{keys=Keys, node_keys=NK, nodes=Nod
     _ ->
         OwnNode = node(),
         try
-            {ok, NewNode, NewPID} = case get_node(NK,Nodes) of
+            NewNode = get_node(NK,Nodes),
+            {ok, NewPID} = case NewNode of
                 OwnNode ->
-                    forseti_key_sup:start_child(Key);
+                    erlang:aply(Module, Function, [Key|Args]);
                 RemoteNode ->
                     lager:debug("create on ~p~n", [RemoteNode]),
-                    rpc:call(RemoteNode, forseti_key_sup, start_child, [Key])
+                    rpc:call(RemoteNode, Module, Function, [Key|Args])
             end,
             gen_leader:reply(From, {ok, NewPID}),
             NewKeys = dict:store(Key, {NewNode,NewPID,undefined}, Keys),
@@ -192,9 +199,14 @@ handle_DOWN(Node, #state{keys=Keys,node_keys=NK}=State, _Election) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init([Nodes]) ->
+init([{Module,Function,Args}, Nodes]) ->
+    process_flag(trap_exit, true), 
     lager:debug("Configured nodes: ~p~n", [Nodes]),
-    {ok, #state{nodes=Nodes}}.
+    {ok, #state{
+        nodes=Nodes,
+        module=Module,
+        function=Function,
+        args=Args}}.
 
 handle_call({setter_all_key, Var, Value}, _From, #state{module=Module, keys=Keys}=State, _Election) ->
     {reply, dict:fold(fun(_Key, {_Node,PID,_Ref}, Acc) ->
