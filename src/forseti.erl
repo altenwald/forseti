@@ -50,8 +50,7 @@
     Nodes::[atom()]) -> {ok, pid()} | {error, term()}.
 
 start_link({_M,_F,_A}=Launch, Nodes) ->
-    lager:debug("Configuring gen_leader with nodes: ~p~n", [Launch,Nodes]),
-    gen_leader:start_link(?SERVER, Nodes, [], ?MODULE, [Nodes], []).
+    gen_leader:start_link(?SERVER, Nodes, [], ?MODULE, [Launch,Nodes], []).
 
 -spec stop() -> ok.
 
@@ -85,19 +84,15 @@ get_key(Key) ->
 %% ------------------------------------------------------------------
 
 elected(State, _Election, undefined) ->
-    lager:info("elected this node (~p) as leader!", [node()]),
     {ok, State, State};
  
 elected(#state{node_keys=NK}=State, Election, Node) ->
-    lager:info("added node ~p as candidate and worker!", [Node]),
     NewState = State#state{node_keys=dict:store(Node, 0, NK)},
     gen_leader:broadcast({from_leader, NewState}, [Node], Election),
     {ok, NewState, NewState}.
  
 
-surrendered(State, _Synch, Election) ->
-    lager:debug("add this node as candidate in list: ~p", 
-        [gen_leader:candidates(Election)]),
+surrendered(State, _Synch, _Election) ->
     {ok, State}.
  
 
@@ -106,7 +101,6 @@ handle_leader_call(_Request, _From, State, _Election) ->
  
 
 handle_leader_cast({search, Key, From}, #state{keys=Keys}=State, _Election) ->
-    lager:debug("search in leader for ~p from ~p~n", [Key, From]),
     case dict:find(Key, Keys) of
     error ->
         gen_leader:reply(From, undefined), 
@@ -119,7 +113,6 @@ handle_leader_cast({search, Key, From}, #state{keys=Keys}=State, _Election) ->
 handle_leader_cast({get_key,Key,From}, #state{
         keys=Keys, node_keys=NK, nodes=Nodes,
         module=Module, function=Function, args=Args}=State, _Election) ->
-    lager:debug("search in leader for getting ~p from ~p~n", [Key, From]),
     {Node,PID} = case dict:find(Key, Keys) of
         error -> {undefined, undefined};
         {ok,{N,P}} -> {N,P}
@@ -134,9 +127,8 @@ handle_leader_cast({get_key,Key,From}, #state{
             NewNode = get_node(NK,Nodes),
             {ok, NewPID} = case NewNode of
                 OwnNode ->
-                    erlang:aply(Module, Function, [Key|Args]);
+                    erlang:apply(Module, Function, [Key|Args]);
                 RemoteNode ->
-                    lager:debug("create on ~p~n", [RemoteNode]),
                     rpc:call(RemoteNode, Module, Function, [Key|Args])
             end,
             gen_leader:reply(From, {ok, NewPID}),
@@ -172,12 +164,10 @@ from_leader(#state{}=State, _OldState, _Election) ->
     {ok, State};
 
 from_leader(Info, State, _Election) ->
-    lager:debug("message from the leader: ~p~n", [Info]),
     {ok, State}.
  
 
 handle_DOWN(Node, #state{keys=Keys,node_keys=NK}=State, _Election) ->
-    lager:debug("fallen node: ~p~n", [Node]),
     NewNK = dict:erase(Node, NK),
     NewKeys = dict:filter(fun
         (_Key, {N,_P}) when N =/= Node -> true;
@@ -192,7 +182,6 @@ handle_DOWN(Node, #state{keys=Keys,node_keys=NK}=State, _Election) ->
 
 init([{Module,Function,Args}, Nodes]) ->
     process_flag(trap_exit, true), 
-    lager:debug("Configured nodes: ~p~n", [Nodes]),
     {ok, #state{
         nodes=Nodes,
         module=Module,
@@ -203,7 +192,6 @@ handle_call(get_metrics, _From, #state{node_keys=NK}=State, _Election) ->
     {reply, dict:to_list(NK), State};
 
 handle_call({get_key, Key}, From, #state{keys=Keys}=State, _Election) ->
-    lager:debug("querying for getting to node ~p about Key=~p~n", [node(), Key]),
     case dict:find(Key, Keys) of
     error ->
         gen_leader:leader_cast(?MODULE, {get_key, Key, From}),
@@ -260,7 +248,6 @@ check(_MyNode, undefined, _PID) -> false;
 check(_MyNode, _Node, undefined) -> false;
 check(Node, Node, PID) -> is_process_alive(PID);
 check(MyNode, Node, PID) -> 
-    lager:debug("mynode=~p ; node=~p ; pid=~p~n", [MyNode,Node,PID]),
     catch rpc:call(Node, erlang, is_process_alive, [PID]).
 
 get_node(NK, Nodes) ->
