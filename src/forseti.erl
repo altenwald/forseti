@@ -8,7 +8,7 @@
 %% ------------------------------------------------------------------
 
 -export([
-    start_link/1,
+    start_link/2,
     stop/0,
 
     get_less_used_node/0,
@@ -60,14 +60,24 @@ start_link({_M,_F,_A}=Launch, Nodes) ->
 stop() ->
     gen_leader:call(?MODULE, stop).
 
+-spec get_less_used_node() -> node().
+
 get_less_used_node() ->
     gen_leader:call(?MODULE, get_node).
+
+-spec search_key(Key :: any()) -> {Node :: node(), PID :: pid()} | undefined.
 
 search_key(Key) ->
     gen_leader:call(?MODULE, {search, Key}).
 
+-type node_metrics() :: {node(), integer()}.
+
+-spec get_metrics() -> [node_metrics()].
+
 get_metrics() ->
     gen_leader:call(?MODULE, get_metrics).
+
+-spec get_key(Key :: any()) -> pid().
 
 get_key(Key) ->
     gen_leader:call(?MODULE, {get_key, Key}).
@@ -106,7 +116,7 @@ handle_leader_cast({search, Key, From}, #state{keys=Keys}=State, _Election) ->
     error ->
         gen_leader:reply(From, undefined), 
         {noreply, State}; 
-    {ok, {Node,PID,_Ref}} ->
+    {ok, {Node,PID}} ->
         gen_leader:reply(From, {Node,PID}), 
         {noreply, State}
     end;
@@ -209,7 +219,7 @@ handle_call({get_key, Key}, From, #state{keys=Keys}=State, _Election) ->
     error ->
         gen_leader:leader_cast(?MODULE, {get_key, Key, From}),
         {noreply, State};
-    {ok, {Node,PID,_Ref}} ->
+    {ok, {Node,PID}} ->
         case check(node(), Node, PID) of
         true ->
             {reply, {ok,PID}, State};
@@ -224,7 +234,7 @@ handle_call({search, Key}, From, #state{keys=Keys}=State, _Election) ->
     error ->
         gen_leader:leader_cast(?MODULE, {search, Key, From}),
         {noreply, State}; 
-    {ok, {Node,PID,_Ref}} ->
+    {ok, {Node,PID}} ->
         {reply, {Node,PID}, State}
     end;
 
