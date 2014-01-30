@@ -13,7 +13,6 @@
 
     get_less_used_node/0,
     search_key/1,
-    save_key/3,
     get_metrics/0,
     get_key/1,
 
@@ -67,14 +66,6 @@ get_less_used_node() ->
 search_key(Key) ->
     gen_leader:call(?MODULE, {search, Key}).
 
-save_key(Key, Node, PID) ->
-    case node() of
-    Node ->
-        gen_leader:cast(?MODULE, {reserve, Key, PID});
-    _ ->
-        rpc:call(Node, gen_leader, cast, [?MODULE, {reserve, Key, PID}])
-    end. 
-
 get_metrics() ->
     gen_leader:call(?MODULE, get_metrics).
 
@@ -126,7 +117,7 @@ handle_leader_cast({get_key,Key,From}, #state{
     lager:debug("search in leader for getting ~p from ~p~n", [Key, From]),
     {Node,PID} = case dict:find(Key, Keys) of
         error -> {undefined, undefined};
-        {ok,{N,P,_Ref}} -> {N,P}
+        {ok,{N,P}} -> {N,P}
     end,
     case check(node(), Node, PID) of
     true ->
@@ -144,8 +135,9 @@ handle_leader_cast({get_key,Key,From}, #state{
                     rpc:call(RemoteNode, Module, Function, [Key|Args])
             end,
             gen_leader:reply(From, {ok, NewPID}),
-            NewKeys = dict:store(Key, {NewNode,NewPID,undefined}, Keys),
-            NewState = State#state{keys=NewKeys},
+            NewKeys = dict:store(Key, {NewNode,NewPID}, Keys),
+            NewNK = increment(NewNode, NK),
+            NewState = State#state{node_keys=NewNK,keys=NewKeys},
             {ok, NewState, NewState}
         catch 
             % the remote node is falling down, repeat the action
@@ -155,15 +147,9 @@ handle_leader_cast({get_key,Key,From}, #state{
         end
     end;
 
-handle_leader_cast({reserve,Node,Key,PID,Ref}, #state{node_keys=NK}=State, _Election) ->
-    NewNK = increment(Node, NK),
-    Keys = dict:store(Key, {Node,PID,Ref}, State#state.keys),
-    NewState = State#state{node_keys=NewNK,keys=Keys},
-    {ok, NewState, NewState};
-
-handle_leader_cast({free,Node,Ref}, #state{node_keys=NK, keys=Keys}=State, _Election) ->
+handle_leader_cast({free,Node,PID}, #state{node_keys=NK, keys=Keys}=State, _Election) ->
     NewKeys = dict:filter(fun
-        (_K,{_N,_P,R}) when R =:= Ref -> false;
+        (_K,{_N,P}) when P =:= PID -> false;
         (_K, _V) -> true
     end, Keys),
     NewNK = case dict:find(Node, NK) of
@@ -189,7 +175,7 @@ handle_DOWN(Node, #state{keys=Keys,node_keys=NK}=State, _Election) ->
     lager:debug("fallen node: ~p~n", [Node]),
     NewNK = dict:erase(Node, NK),
     NewKeys = dict:filter(fun
-        (_Key, {N,_P,_R}) when N =/= Node -> true;
+        (_Key, {N,_P}) when N =/= Node -> true;
         (_Key, _Value) -> false
     end, Keys), 
     NewState = State#state{keys=NewKeys,node_keys=NewNK},
@@ -209,7 +195,7 @@ init([{Module,Function,Args}, Nodes]) ->
         args=Args}}.
 
 handle_call({setter_all_key, Var, Value}, _From, #state{module=Module, keys=Keys}=State, _Election) ->
-    {reply, dict:fold(fun(_Key, {_Node,PID,_Ref}, Acc) ->
+    {reply, dict:fold(fun(_Key, {_Node,PID}, Acc) ->
         catch Module:setter(PID, Var, Value),
         Acc + 1
     end, 0, Keys), State};
@@ -251,16 +237,11 @@ handle_call(stop, _From, State, _Election) ->
 handle_call(_Request, _From, State, _Election) ->
     {reply, ok, State}.
 
-handle_cast({reserve, Key, PID}, #state{}=State, _Election) ->
-    Ref = monitor(process, PID),
-    gen_leader:leader_cast(?MODULE, {reserve, node(), Key, PID, Ref}), 
-    {noreply, State};
-
 handle_cast(_Msg, State, _Election) ->
     {noreply, State}.
 
-handle_info({'DOWN', Ref, process, _Object, _Info}, State, _Election) ->
-    gen_leader:leader_cast(?MODULE, {free, node(), Ref}), 
+handle_info({'EXIT', PID, _Info}, State, _Election) ->
+    gen_leader:leader_cast(?MODULE, {free, node(), PID}), 
     {noreply, State};
 
 handle_info(_Info, State, _Election) ->
