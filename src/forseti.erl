@@ -163,7 +163,7 @@ handle_leader_cast(_Request, State, _Election) ->
 from_leader(#state{}=State, _OldState, _Election) ->
     {ok, State};
 
-from_leader(Info, State, _Election) ->
+from_leader(_Info, State, _Election) ->
     {ok, State}.
  
 
@@ -247,7 +247,7 @@ code_change(_OldVsn, State, _Election, _Extra) ->
 check(_MyNode, undefined, _PID) -> false;
 check(_MyNode, _Node, undefined) -> false;
 check(Node, Node, PID) -> is_process_alive(PID);
-check(MyNode, Node, PID) -> 
+check(_MyNode, Node, PID) -> 
     catch rpc:call(Node, erlang, is_process_alive, [PID]).
 
 get_node(NK, Nodes) ->
