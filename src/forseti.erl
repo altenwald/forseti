@@ -132,7 +132,14 @@ handle_leader_cast({get_key,Key,From}, #state{
                     rpc:call(RemoteNode, Module, Function, [Key|Args])
             end,
             NewPID = case Result of
-                {ok, NewP} -> NewP;
+                {ok, NewP} -> 
+                    case NewNode of
+                        OwnNode -> 
+                            gen_leader:cast(forseti, {link,NewP});
+                        RemoteNode2 ->
+                            rpc:call(RemoteNode2, gen_leader, cast, [forseti, {link,NewP}])
+                    end,
+                    NewP;
                 {error, {already_started,OldP}} -> OldP
             end,
             gen_leader:reply(From, {ok, NewPID}),
@@ -227,6 +234,10 @@ handle_call(stop, _From, State, _Election) ->
 
 handle_call(_Request, _From, State, _Election) ->
     {reply, ok, State}.
+
+handle_cast({link, PID}, State, _Election) ->
+    link(PID),
+    {noreply, State};
 
 handle_cast(_Msg, State, _Election) ->
     {noreply, State}.
