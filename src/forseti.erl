@@ -125,11 +125,15 @@ handle_leader_cast({get_key,Key,From}, #state{
         OwnNode = node(),
         try
             NewNode = get_node(NK,Nodes),
-            {ok, NewPID} = case NewNode of
+            Result = case NewNode of
                 OwnNode ->
                     erlang:apply(Module, Function, [Key|Args]);
                 RemoteNode ->
                     rpc:call(RemoteNode, Module, Function, [Key|Args])
+            end,
+            NewPID = case Result of
+                {ok, NewP} -> NewP;
+                {error, {already_started,OldP}} -> OldP
             end,
             gen_leader:reply(From, {ok, NewPID}),
             NewKeys = dict:store(Key, {NewNode,NewPID}, Keys),
