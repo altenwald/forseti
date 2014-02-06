@@ -1,0 +1,6 @@
+#!/bin/bash
+
+epmd -daemon
+rm -rf .eunit
+mkdir .eunit
+cp deps/*/ebin/* .eunit

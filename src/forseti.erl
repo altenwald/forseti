@@ -9,6 +9,7 @@
 
 -export([
     start_link/2,
+    start/2,
     stop/0,
 
     get_less_used_node/0,
@@ -41,6 +42,14 @@
     args :: [any()]
 }).
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
+-ifndef(TEST).
+-define(debugFmt(A,B), (ok)).
+-endif.
+
 %% ------------------------------------------------------------------
 %% API Function Definitions
 %% ------------------------------------------------------------------
@@ -51,6 +60,13 @@
 
 start_link({_M,_F,_A}=Launch, Nodes) ->
     gen_leader:start_link(?SERVER, Nodes, [], ?MODULE, [Launch,Nodes], []).
+
+-spec start(
+    {Module :: atom(), Function :: atom(), Args :: [any()]},
+    Nodes::[atom()]) -> {ok, pid()} | {error, term()}.
+
+start({_M,_F,_A}=Launch, Nodes) ->
+    gen_leader:start(?SERVER, Nodes, [], ?MODULE, [Launch,Nodes], []).
 
 -spec stop() -> ok.
 
@@ -83,11 +99,18 @@ get_key(Key) ->
 %% gen_leader Function Definitions
 %% ------------------------------------------------------------------
 
-elected(State, _Election, undefined) ->
-    {ok, State, State};
+elected(#state{node_keys=NK}=State, _Election, undefined) ->
+    NewState = case dict:find(node(), NK) of
+        error -> State#state{node_keys=dict:store(node(), 0, NK)};
+        _ -> State
+    end,
+    {ok, NewState, NewState};
  
 elected(#state{node_keys=NK}=State, Election, Node) ->
-    NewState = State#state{node_keys=dict:store(Node, 0, NK)},
+    NewState = case dict:find(Node, NK) of
+        error -> State#state{node_keys=dict:store(Node, 0, NK)};
+        _ -> State
+    end,
     gen_leader:broadcast({from_leader, NewState}, [Node], Election),
     {ok, NewState, NewState}.
  
@@ -122,31 +145,19 @@ handle_leader_cast({get_key,Key,From}, #state{
         gen_leader:reply(From, {ok, PID}),
         {noreply, State};
     _ ->
-        OwnNode = node(),
         try
             NewNode = get_node(NK,Nodes),
-            Result = case NewNode of
-                OwnNode ->
-                    erlang:apply(Module, Function, [Key|Args]);
-                RemoteNode ->
-                    rpc:call(RemoteNode, Module, Function, [Key|Args])
-            end,
-            NewPID = case Result of
+            NewPID = case rpc:call(NewNode, Module, Function, [Key|Args]) of
                 {ok, NewP} -> 
-                    case NewNode of
-                        OwnNode -> 
-                            gen_leader:cast(forseti, {link,NewP});
-                        RemoteNode2 ->
-                            rpc:call(RemoteNode2, gen_leader, cast, [forseti, {link,NewP}])
-                    end,
                     NewP;
-                {error, {already_started,OldP}} -> OldP
+                {error, {already_started,OldP}} -> 
+                    OldP
             end,
             gen_leader:reply(From, {ok, NewPID}),
             NewKeys = dict:store(Key, {NewNode,NewPID}, Keys),
             NewNK = increment(NewNode, NK),
             NewState = State#state{node_keys=NewNK,keys=NewKeys},
-            {ok, NewState, NewState}
+            {ok, {NewState, {link, NewNode, NewPID}}, NewState}
         catch 
             % the remote node is falling down, repeat the action
             _:{badmatch,{badrpc,_}} ->
@@ -171,10 +182,18 @@ handle_leader_cast(_Request, State, _Election) ->
     {noreply, State}.
  
 
+from_leader({#state{}=State, {link,Node,PID}}, _OldState, _Election) when Node =:= node() ->
+    link(PID),
+    {ok, State};
+
+from_leader({#state{}=State, {link,_Node,_PID}}, _OldState, _Election) ->
+    {ok, State};
+
 from_leader(#state{}=State, _OldState, _Election) ->
     {ok, State};
 
 from_leader(_Info, State, _Election) ->
+    ?debugFmt("Received state in ~p~n", [node()]),
     {ok, State}.
  
 
@@ -234,10 +253,6 @@ handle_call(stop, _From, State, _Election) ->
 
 handle_call(_Request, _From, State, _Election) ->
     {reply, ok, State}.
-
-handle_cast({link, PID}, State, _Election) ->
-    link(PID),
-    {noreply, State};
 
 handle_cast(_Msg, State, _Election) ->
     {noreply, State}.
