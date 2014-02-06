@@ -90,7 +90,7 @@ search_key(Key) ->
 get_metrics() ->
     gen_leader:call(?MODULE, get_metrics).
 
--spec get_key(Key :: any()) -> pid().
+-spec get_key(Key :: any()) -> pid() | {error, Reason::atom()}.
 
 get_key(Key) ->
     gen_leader:call(?MODULE, {get_key, Key}).
@@ -151,7 +151,9 @@ handle_leader_cast({get_key,Key,From}, #state{
                 {ok, NewP} -> 
                     NewP;
                 {error, {already_started,OldP}} -> 
-                    OldP
+                    OldP;
+                {error, Reason} ->
+                    throw(enoproc)
             end,
             gen_leader:reply(From, {ok, NewPID}),
             NewKeys = dict:store(Key, {NewNode,NewPID}, Keys),
@@ -162,6 +164,12 @@ handle_leader_cast({get_key,Key,From}, #state{
             % the remote node is falling down, repeat the action
             _:{badmatch,{badrpc,_}} ->
                 gen_leader:leader_cast(?MODULE, {get_key,Key,From}),
+                {noreply, State};
+            _:{case_clause, _} ->
+                gen_leader:reply(From, {error, eprocfails}),
+                {noreply, State};
+            _:enoproc ->
+                gen_leader:reply(From, {error, enoproc}),
                 {noreply, State}
         end
     end;

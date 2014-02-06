@@ -7,6 +7,12 @@
 
 %% -- code for the pool
 
+start_link(throw_error) ->
+    throw(enoproc);
+
+start_link(ret_error) ->
+    {error, notfound};
+
 start_link(Key) ->
     {ok, spawn_link(fun() ->
         receive _ -> ok end
@@ -18,8 +24,10 @@ generator_test_() ->
     {foreach,
         fun start/0,
         fun stop/1, [
-            %fun basic_test/1,
-            fun load_test/1
+            fun basic_test/1,
+            fun load_test/1,
+            fun ret_error/1,
+            fun throw_error/1
         ]
     }.
 
@@ -85,3 +93,15 @@ load_test(_) ->
         ?assertEqual(0, proplists:get_value(forseti3@localhost, EmptyNodes)),
         true
     end)}].
+
+ret_error(_) ->
+    ?_assert(begin
+        ?assertMatch({error,_}, forseti:get_key(ret_error)),
+        true
+    end).
+
+throw_error(_) ->
+    ?_assert(begin
+        ?assertMatch({error,_}, forseti:get_key(throw_error)),
+        true
+    end).
