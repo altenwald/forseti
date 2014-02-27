@@ -152,7 +152,7 @@ handle_leader_cast({get_key,Key,From}, #state{
                     NewP;
                 {error, {already_started,OldP}} -> 
                     OldP;
-                {error, Reason} ->
+                {error, _Reason} ->
                     throw(enoproc)
             end,
             gen_leader:reply(From, {ok, NewPID}),
