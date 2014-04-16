@@ -7,13 +7,19 @@
 
 %% -- code for the pool
 
+start_link(<<"delay",_/binary>>) ->
+    timer:sleep(2000),
+    {ok, spawn_link(fun() ->
+        receive _ -> ok end
+    end)};
+
 start_link(throw_error) ->
     throw(enoproc);
 
 start_link(ret_error) ->
     {error, notfound};
 
-start_link(Key) ->
+start_link(_Key) ->
     {ok, spawn_link(fun() ->
         receive _ -> ok end
     end)}.
@@ -26,6 +32,7 @@ generator_test_() ->
         fun stop/1, [
             fun basic_test/1,
             fun load_test/1,
+            fun lock_test/1,
             fun ret_error/1,
             fun throw_error/1
         ]
@@ -43,13 +50,19 @@ start() ->
     ?debugFmt("configuring nodes = ~p~n", [Nodes]),
     timer:sleep(1000),
     forseti:start_link(Call, Nodes),
-    spawn(forseti2@localhost, fun() -> forseti:start(Call, Nodes) end),
-    spawn(forseti3@localhost, fun() -> forseti:start(Call, Nodes) end),
+    spawn(forseti2@localhost, fun() -> 
+        forseti:start_link(Call, Nodes),
+        receive ok -> ok end
+    end),
+    spawn(forseti3@localhost, fun() -> 
+        forseti:start_link(Call, Nodes),
+        receive ok -> ok end
+    end),
     timer:sleep(500),
     ok.
 
 stop(_) ->
-    [ rpc:call(Node, forseti, stop, []) || Node <- [node()|nodes()] ],
+    %[ rpc:call(Node, forseti, stop, []) || Node <- [node()|nodes()] ],
     [ slave:stop(N) || N <- nodes() ],
     net_kernel:stop(),
     ok.
@@ -92,6 +105,47 @@ load_test(_) ->
         ?assertEqual(0, proplists:get_value(forseti2@localhost, EmptyNodes)),
         ?assertEqual(0, proplists:get_value(forseti3@localhost, EmptyNodes)),
         true
+    end)}].
+
+lock_test(_) ->
+    [{timeout, 60, ?_assert(begin
+        ParentPID = self(),
+        PID1 = spawn(fun() ->
+            lists:foreach(fun(N) ->
+                Key = <<"delay",N/integer>>,
+                ?debugFmt("B> generating key = ~p~n", [Key]),
+                forseti:get_key(Key),
+                ?debugFmt("<B generated key = ~p~n", [Key])
+            end, lists:seq(1,4)),
+            ParentPID ! ok
+        end),
+        timer:sleep(4000),
+        {_,S1,_} = os:timestamp(),
+        Seq = lists:seq(1, 2), 
+        lists:foreach(fun(N) ->
+            Key = <<"delay",N/integer>>,
+            ?debugFmt(">> request existent key = ~p~n", [Key]),
+            forseti:get_key(Key),
+            ?debugFmt("<< requested existent key = ~p~n", [Key])
+        end, Seq ++ Seq ++ Seq ++ Seq ++ Seq),
+        {_,S2,_} = os:timestamp(),
+        receive 
+            ok -> ok 
+        end,
+        (S1 + 6) > S2
+    end)},
+    {timeout, 60, ?_assert(begin
+        lists:foreach(fun(N) ->
+            Key = <<"delay",N/integer>>,
+            {_Node,PID} = forseti:get_key(Key),
+            PID ! ok
+        end, lists:seq(1,4)),
+        timer:sleep(500),
+        EmptyNodes = rpc:call(forseti3@localhost, forseti, get_metrics, []),
+        ?debugFmt("metrics: ~p~n", [EmptyNodes]),
+        0 =:= proplists:get_value(forseti1@localhost, EmptyNodes) andalso
+        0 =:= proplists:get_value(forseti2@localhost, EmptyNodes) andalso
+        0 =:= proplists:get_value(forseti3@localhost, EmptyNodes)
     end)}].
 
 ret_error(_) ->
