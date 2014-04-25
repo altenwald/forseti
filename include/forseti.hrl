@@ -1,0 +1,2 @@
+-define(MAX_RETRIES, 20).
+-define(MAX_TIME, 10).

@@ -10,8 +10,7 @@
     get_key/1
 ]).
 
--define(MAX_RETRIES, 20).
--define(MAX_TIME, 10).
+-include("../include/forseti.hrl").
 
 start_link(Call, Nodes) ->
 	start_link(?MAX_RETRIES, ?MAX_TIME, Call, Nodes).
