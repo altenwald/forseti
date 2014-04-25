@@ -3,5 +3,6 @@
     {vsn, "semver"},
     {registered, []},
     {applications, [kernel, stdlib, gen_leader]},
+    {mod, {forseti_app, []}},
     {env, []}
 ]}.
