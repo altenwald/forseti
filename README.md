@@ -12,6 +12,22 @@ When is needed to access to an existent process, the search is done in the worke
 
 The implementation is very easy:
 
+You can configure it in reltool.config like an OTP application.
+
+An example config (usually app.config)
+
+```erlang
+{forseti, [
+    %% max_retries and max_time defines the maximum restart frequency of the supervisor
+    {max_retries, 20},                           %% 20 by default, no mandatory
+    {max_time, 10 },                             %% 10 by default, no mandatory
+    {nodes, ['node1@server1', 'node2@server2']}, %% [node()] by default, no mandatory
+    {call, {test_forseti, start_link, []} }      %% mandatory
+]}
+```
+
+Else you can use it in this way
+
 ```erlang
 Call = {test_forseti, start_link, []},
 Nodes = [node1@server1, node2@server2],
