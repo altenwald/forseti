@@ -113,6 +113,8 @@ handle_leader_cast({get_key,Key,From}, #state{
         try
             NewNode = choose_node(NK,Nodes),
             NewPID = case rpc:call(NewNode, Module, Function, [Key|Args]) of
+                {ok, _Node, NewP} -> 
+                    NewP;
                 {ok, NewP} -> 
                     NewP;
                 {error, {already_started,OldP}} -> 
