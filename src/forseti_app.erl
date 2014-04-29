@@ -8,7 +8,7 @@
     stop/1
 ]).
 
--include("../include/forseti.hrl").
+-include("forseti.hrl").
 
 %%%===================================================================
 %%% Application callbacks
