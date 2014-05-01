@@ -126,14 +126,12 @@ handle_leader_cast({get_key,Key,From}, #state{
             NewNK = increment(NewNode, NK),
             NewState = State#state{node_keys=NewNK,keys=NewKeys},
             gen_server:reply(From, {ok, NewPID}),
-            gen_server:cast(forseti_server, {keys, NewKeys}),
+            gen_server:cast(forseti_server, {add, Key, {NewNode,NewPID}}),
             case NewNode =:= node() of
-            true ->
-                link(NewPID),
-                {ok, NewState, NewState};
-            false ->
-                {ok, {NewState, {link, NewNode, NewPID}}, NewState}
-            end
+                true -> link(NewPID);
+                false -> ok
+            end,
+            {ok, {add, Key, {NewNode, NewPID}, NewNK}, NewState}
         catch 
             % the remote node is falling down, repeat the action
             _:{badmatch,{badrpc,_}} ->
@@ -149,30 +147,42 @@ handle_leader_cast({get_key,Key,From}, #state{
     end;
 
 handle_leader_cast({free,Node,PID}, #state{node_keys=NK, keys=Keys}=State, _Election) ->
-    NewKeys = dict:filter(fun
-        (_K,{_N,P}) when P =:= PID -> false;
-        (_K, _V) -> true
-    end, Keys),
-    NewNK = case dict:find(Node, NK) of
-        error -> NK;
-        {ok,Value} -> dict:store(Node, Value-1, NK)
-    end,
-    NewState = State#state{node_keys=NewNK, keys=NewKeys},
-    gen_server:cast(forseti_server, {keys, NewKeys}),
-    {ok, NewState, NewState};
+    Key = dict:fold(fun
+        (K,{N,P},undefined) when N =:= Node andalso P =:= PID -> K;
+        (_,_,P) -> P
+    end, undefined, Keys),
+    case Key of
+    undefined -> 
+        {ok, State};
+    Key ->
+        NewKeys = dict:erase(Key, Keys),
+        NewNK = case dict:find(Node, NK) of
+            error -> NK;
+            {ok,Value} -> dict:store(Node, Value-1, NK)
+        end,
+        NewState = State#state{node_keys=NewNK, keys=NewKeys},
+        gen_server:cast(forseti_server, {del, Key}),
+        {ok, {del, Key, NewNK}, NewState}
+    end;
 
 handle_leader_cast(_Request, State, _Election) ->
     {noreply, State}.
  
 
-from_leader({#state{}=State, {link,Node,PID}}, _OldState, _Election) when Node =:= node() ->
-    link(PID),
-    gen_server:cast(forseti_server, {keys, State#state.keys}),
-    {ok, State};
+from_leader({del, Key, NodeKeys}, #state{keys=Keys}=State, _Election) ->
+    gen_server:cast(forseti_server, {del, Key}),
+    {ok, State#state{node_keys=NodeKeys, keys=dict:erase(Key, Keys)}};
 
-from_leader({#state{}=State, {link,_Node,_PID}}, _OldState, _Election) ->
-    gen_server:cast(forseti_server, {keys, State#state.keys}),
-    {ok, State};
+from_leader({add, Key, {Node, PID}=Value, NodeKeys}, 
+        #state{keys=Keys}=State, _Election) when Node =:= node() ->
+    link(PID),
+    gen_server:cast(forseti_server, {add, Key, {Node, PID}}),
+    {ok, State#state{node_keys=NodeKeys, keys=dict:store(Key, Value, Keys)}};
+
+from_leader({add, Key, {Node, PID}=Value, NodeKeys}, 
+        #state{keys=Keys}=State, _Election) ->
+    gen_server:cast(forseti_server, {add, Key, {Node, PID}}),
+    {ok, State#state{node_keys=NodeKeys, keys=dict:store(Key, Value, Keys)}};
 
 from_leader(#state{}=State, _OldState, _Election) ->
     gen_server:cast(forseti_server, {keys, State#state.keys}),

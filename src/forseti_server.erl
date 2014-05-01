@@ -84,15 +84,17 @@ handle_call(stop, _From, State) ->
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
+handle_cast({add, Key, Value}, #state{keys=Keys}=State) ->
+    {noreply, State#state{keys = dict:store(Key, Value, Keys)}};
+
+handle_cast({del, Key}, #state{keys=Keys}=State) ->
+    {noreply, State#state{keys = dict:erase(Key, Keys)}};
+
 handle_cast({keys, Keys}, State) ->
     {noreply, State#state{keys=Keys}};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
-
-handle_info({'EXIT', PID, _Info}, State) ->
-    gen_leader:leader_cast(forseti_leader, {free, node(), PID}), 
-    {noreply, State};
 
 handle_info(_Info, State) ->
     {noreply, State}.
