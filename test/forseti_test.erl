@@ -110,7 +110,7 @@ load_test(_) ->
 lock_test(_) ->
     [{timeout, 60, ?_assert(begin
         ParentPID = self(),
-        PID1 = spawn(fun() ->
+        spawn(fun() ->
             lists:foreach(fun(N) ->
                 Key = <<"delay",N/integer>>,
                 ?debugFmt("B> generating key = ~p~n", [Key]),
@@ -128,6 +128,7 @@ lock_test(_) ->
             forseti:get_key(Key),
             ?debugFmt("<< requested existent key = ~p~n", [Key])
         end, Seq ++ Seq ++ Seq ++ Seq ++ Seq),
+        ?assertEqual(undefined, forseti:search_key(<<"delay",4/integer>>)),
         {_,S2,_} = os:timestamp(),
         receive 
             ok -> ok 
