@@ -90,10 +90,6 @@ handle_cast({keys, Keys}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info({'EXIT', PID, _Info}, State) ->
-    gen_leader:leader_cast(forseti_leader, {free, node(), PID}), 
-    {noreply, State};
-
 handle_info(_Info, State) ->
     {noreply, State}.
 
