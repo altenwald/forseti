@@ -16,6 +16,8 @@ You can configure it in reltool.config like an OTP application.
 
 An example config (usually app.config)
 
+**IMPORTANT** if you use this way, you'll be sure forseti is loaded after all the needed resources for start to launch processes.
+
 ```erlang
 {forseti, [
     %% max_retries and max_time defines the maximum restart frequency of the supervisor
