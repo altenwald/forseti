@@ -84,6 +84,12 @@ handle_call(stop, _From, State) ->
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
+handle_cast({add, Key, Value}, #state{keys=Keys}=State) ->
+    {noreply, State#state{keys = dict:store(Key, Value, Keys)}};
+
+handle_cast({del, Key}, #state{keys=Keys}=State) ->
+    {noreply, State#state{keys = dict:erase(Key, Keys)}};
+
 handle_cast({keys, Keys}, State) ->
     {noreply, State#state{keys=Keys}};
 

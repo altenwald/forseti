@@ -10,7 +10,7 @@
     get_key/1
 ]).
 
--include("../include/forseti.hrl").
+-include("forseti.hrl").
 
 start_link(Call, Nodes) ->
 	start_link(?MAX_RETRIES, ?MAX_TIME, Call, Nodes).

@@ -8,7 +8,7 @@
     stop/1
 ]).
 
--include("../include/forseti.hrl").
+-include("forseti.hrl").
 
 %%%===================================================================
 %%% Application callbacks
@@ -37,10 +37,10 @@ start(_StartType, _StartArgs) ->
     Call = proplists:get_value(call, Conf),
     Nodes = proplists:get_value(nodes, Conf, [node()]),
     case Call of
-        undefined ->
-            {error, <<"call undefined">>};
-        _ ->
-            forseti_sup:start_link(MaxRetries, MaxTime, Call, Nodes)
+    undefined ->
+        {ok, self()};
+    _ ->
+        forseti_sup:start_link(MaxRetries, MaxTime, Call, Nodes)
     end.
 
 %%--------------------------------------------------------------------
