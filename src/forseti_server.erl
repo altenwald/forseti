@@ -54,17 +54,20 @@ stop() ->
 init([]) ->
     {ok, #state{}}.
 
-handle_call({get_key, Key}, From, #state{keys=Keys}=State) ->
+handle_call({get_key, Key}, From, State) ->
+    handle_call({get_key, Key, []}, From, State);
+
+handle_call({get_key, Key, Args}, From, #state{keys=Keys}=State) ->
     case dict:find(Key, Keys) of
     error ->
-        gen_leader:leader_cast(forseti_leader, {get_key, Key, From}),
+        gen_leader:leader_cast(forseti_leader, {get_key, Key, Args, From}),
         {noreply, State};
     {ok, {Node,PID}} ->
         case check(node(), Node, PID) of
         true ->
             {reply, {ok,PID}, State};
         _ ->
-            gen_leader:leader_cast(forseti_leader, {get_key, Key, From}),
+            gen_leader:leader_cast(forseti_leader, {get_key, Key, Args, From}),
             {noreply, State}
         end
     end;

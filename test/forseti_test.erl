@@ -24,6 +24,11 @@ start_link(_Key) ->
         receive _ -> ok end
     end)}.
 
+start_link(_Key, arg1, arg2, arg3) ->
+    {ok, spawn_link(fun() ->
+        receive _ -> ok end
+    end)}.
+
 %% -- generator
 
 generator_test_() ->
@@ -31,6 +36,7 @@ generator_test_() ->
         fun start/0,
         fun stop/1, [
             fun basic_test/1,
+            fun args_test/1,
             fun load_test/1,
             fun lock_test/1,
             fun ret_error/1,
@@ -76,7 +82,19 @@ basic_test(_) ->
         {_Node,PID} = forseti:search_key(<<"newkey">>),
         PID ! ok,
         timer:sleep(500),
-        ?assertMatch(undefined, forseti:search_key(<<"newkey">>)),
+        ?assertEqual(undefined, forseti:search_key(<<"newkey">>)),
+        true
+    end).
+
+args_test(_) ->
+    ?_assert(begin
+        ?assertEqual(undefined, forseti:search_key(<<"argskey">>)),
+        Args = [arg1, arg2, arg3],
+        ?assertMatch({_Node,_PID}, forseti:get_key(<<"argskey">>, Args)),
+        {_Node,PID} = forseti:search_key(<<"argskey">>), 
+        PID ! ok,
+        timer:sleep(500),
+        ?assertEqual(undefined, forseti:search_key(<<"argskey">>)),
         true
     end).
 

@@ -53,6 +53,14 @@ For get a PID you can use the following function:
 {Node,PID} = forseti:get_key(<<"mykey1">>),
 ```
 
+Or passing more args to the init function:
+
+```erlang
+{Node,PID} = forseti:get_key(<<"mykey1">>, [make_ref()]),
+```
+
+In this case, the function to be called will be `start_link/2`.
+
 If you only want to search a key and in case this not exist returns `undefined` you can use:
 
 ```erlang

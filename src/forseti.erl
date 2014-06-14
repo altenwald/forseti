@@ -7,7 +7,8 @@
     get_less_used_node/0,
     search_key/1,
     get_metrics/0,
-    get_key/1
+    get_key/1,
+    get_key/2
 ]).
 
 -include("forseti.hrl").
@@ -40,3 +41,8 @@ get_metrics() ->
 get_key(Key) ->
     gen_server:call(forseti_server, {get_key, Key}).
 
+-spec get_key(Key :: any(), Args :: [term()]) ->
+    pid() | {error, Reason::atom()}.
+
+get_key(Key, Args) ->
+    gen_server:call(forseti_server, {get_key, Key, Args}).

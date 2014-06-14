@@ -98,7 +98,7 @@ handle_leader_cast({search, Key, From}, #state{keys=Keys}=State, _Election) ->
         {noreply, State}
     end;
 
-handle_leader_cast({get_key,Key,From}, #state{
+handle_leader_cast({get_key,Key,NewArgs,From}, #state{
         keys=Keys, node_keys=NK, nodes=Nodes,
         module=Module, function=Function, args=Args}=State, _Election) ->
     {Node,PID} = case dict:find(Key, Keys) of
@@ -112,7 +112,8 @@ handle_leader_cast({get_key,Key,From}, #state{
     _ ->
         try
             NewNode = choose_node(NK,Nodes),
-            NewPID = case rpc:call(NewNode, Module, Function, [Key|Args]) of
+            Params = [Key|NewArgs] ++ Args,
+            NewPID = case rpc:call(NewNode, Module, Function, Params) of
                 {ok, _Node, NewP} -> 
                     NewP;
                 {ok, NewP} -> 
