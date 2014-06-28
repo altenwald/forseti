@@ -165,6 +165,8 @@ init_db([]) ->
         {attributes, record_info(fields, forseti_processes)}]),
     mnesia:create_table(forseti_nodes, [
         {attributes, record_info(fields, forseti_nodes)}]),
+    timer:sleep(500), 
+    mnesia:dirty_write(#forseti_nodes{node=node(), proc_len=0}),
     ok;
 
 init_db([Node|Nodes]) when Node =:= node() ->
@@ -180,6 +182,8 @@ init_db([Node|Nodes]) ->
             mnesia:change_table_copy_type(schema, node(), disc_copies), 
             mnesia:add_table_copy(forseti_processes, node(), ram_copies),
             mnesia:add_table_copy(forseti_nodes, node(), ram_copies), 
+            timer:sleep(500), 
+            mnesia:dirty_write(#forseti_nodes{node=node(), proc_len=0}),
             ok;
         _ ->
             init_db(Nodes)
