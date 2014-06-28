@@ -201,7 +201,8 @@ release(transaction, Node, PID) ->
         [Key] = mnesia:select(forseti_processes, Match),
         mnesia:delete({forseti_processes, Key}),
         [#forseti_nodes{proc_len=PL}=FN] = mnesia:read(forseti_nodes, Node),
-        mnesia:write(FN#forseti_nodes{proc_len=PL-1})
+        mnesia:write(FN#forseti_nodes{proc_len=PL-1}),
+        broadcast({del, Key})
     end),
     ok;
 
@@ -216,6 +217,7 @@ release(dirty, Node, PID) ->
     [#forseti_nodes{proc_len=PL}=FN] = 
         mnesia:dirty_read(forseti_nodes, Node),
     mnesia:dirty_write(FN#forseti_nodes{proc_len=PL-1}),
+    broadcast({del, Key}),
     ok.
 
 -spec find_key(method(), key()) -> {node(), pid()} | undefined.
@@ -243,12 +245,12 @@ generate_process(Method, Key, M, F, A) ->
     case rpc:call(Node, M, F, A) of
     {ok, RetNode, NewP} ->
         store_process(Method, Key, RetNode, NewP),
-        gen_server:cast(forseti_server, {add, Key, {RetNode, NewP}}),
+        broadcast({add, Key, {RetNode, NewP}}),
         gen_server:cast({?MODULE, RetNode}, {link, NewP}),
         {RetNode, NewP};
     {ok, NewP} ->
         store_process(Method, Key, node(NewP), NewP),
-        gen_server:cast(forseti_server, {add, Key, {node(NewP), NewP}}),
+        broadcast({add, Key, {node(NewP), NewP}}),
         gen_server:cast({?MODULE, node(NewP)}, {link, NewP}),
         {node(NewP), NewP};
     {error, {already_started,OldP}} ->
@@ -313,3 +315,9 @@ get_metrics(transaction) ->
     end),
     ActiveFull.
 
+-spec broadcast(Msg::term()) -> ok.
+
+broadcast(Msg) ->
+    lists:foreach(fun(Node) ->
+        gen_server:cast({Node, forseti_server}, Msg)
+    end, [node()|nodes()]).
