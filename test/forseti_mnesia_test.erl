@@ -101,7 +101,9 @@ args_test(_) ->
 load_test(_) ->
     [{timeout, 60, ?_assert(begin
         [ forseti:get_key(N) || N <- lists:seq(1,?PROCESSES) ],
+        timer:sleep(500),
         FullNodes = forseti:get_metrics(),
+        ?debugFmt("full nodes = ~p~n", [FullNodes]),
         ?assertEqual((?PROCESSES div 3), proplists:get_value(forseti1@localhost, FullNodes)),
         ?assertEqual((?PROCESSES div 3), proplists:get_value(forseti2@localhost, FullNodes)),
         ?assertEqual((?PROCESSES div 3), proplists:get_value(forseti3@localhost, FullNodes)),

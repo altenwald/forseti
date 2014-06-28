@@ -97,7 +97,7 @@ get_key_p(Key, Args, From) ->
     Params = [Key|A] ++ Args,
     Reply = case find_key(Method, Key) of
     {Node,PID} ->
-        case forseti:is_alive(Node, PID) of
+        case forseti_lib:is_alive(Node, PID) of
         true ->
             {Node,PID};
         false ->
