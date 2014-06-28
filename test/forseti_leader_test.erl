@@ -1,4 +1,4 @@
--module(forseti_test).
+-module(forseti_leader_test).
 -compile([export_all]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -51,7 +51,7 @@ start() ->
     slave:start(localhost, forseti2),
     slave:start(localhost, forseti3),
 
-    Call = {forseti_test, start_link, []},
+    Call = {?MODULE, start_link, []},
     Nodes = [node()|nodes()],
     ?debugFmt("configuring nodes = ~p~n", [Nodes]),
     timer:sleep(1000),

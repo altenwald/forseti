@@ -1,9 +1,10 @@
 -module(forseti_sup).
+-author('manuel@altenwald.com').
 
 -behaviour(supervisor).
 
 %% API
--export([start_link/4]).
+-export([start_link/5]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -15,8 +16,9 @@
 %% API functions
 %% ===================================================================
 
-start_link(MaxR, MaxT, Call, Nodes) ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, [MaxR, MaxT, Call, Nodes]).
+start_link(Backend, MaxR, MaxT, Call, Nodes) ->
+    supervisor:start_link({local, ?MODULE}, ?MODULE, 
+        [Backend, MaxR, MaxT, Call, Nodes]).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -31,8 +33,9 @@ start_link(MaxR, MaxT, Call, Nodes) ->
 %%                     {error, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([MaxR, MaxT, Call, Nodes]) ->
+init([Backend, MaxR, MaxT, Call, Nodes]) ->
+	Module = forseti_app:get_mod_backend(Backend),
     {ok, {{one_for_all, MaxR, MaxT}, [
-        ?CHILD(forseti_leader, [Call, Nodes]),
+    	?CHILD(Module, [Call, Nodes]),
         ?CHILD(forseti_server, [])
     ]}}.

@@ -12,6 +12,8 @@ When is needed to access to an existent process, the search is done in the worke
 
 > IMPORTANT: forseti is designed using C (consistency) and A (availability) from the [C-A-P theorem](http://en.wikipedia.org/wiki/CAP_theorem). We prefer to use forseti in a private network with a controlled connection between nodes. If you need to use forseti with connection between NOC (even if you use a VPN) is not recommended because you perhaps need to use somthing with P (partition-tolerant) and [evetual consistency](http://en.wikipedia.org/wiki/Eventual_consistency).
 
+## Getting started
+
 The implementation is very easy:
 
 You can configure it in reltool.config like an OTP application.
@@ -22,7 +24,7 @@ An example config (usually app.config)
 
 ```erlang
 {forseti, [
-    %% max_retries and max_time defines the maximum restart frequency of the supervisor
+    %% max_retries and max_time defines the maximum restart frequency for the supervisor
     {max_retries, 20},                           %% 20 by default, no mandatory
     {max_time, 10 },                             %% 10 by default, no mandatory
     {nodes, ['node1@server1', 'node2@server2']}, %% [node()] by default, no mandatory
@@ -71,3 +73,60 @@ end
 ```
 
 Enjoy!
+
+## Backends
+
+Use only gen_server has several pros and cons so, I added more backends (with more pros and cons too) to let you decide what's the better implementation for your development.
+
+### gen_leader
+
+The first backend I use. It's faster than others, hasn't got SPOF (Single Point Of Failure) but you need to shutdown the cluster to add new nodes. And you can only use `gen_leader` once by node. If you plan to use `gen_leader` for your specific implementation, you should use another backend.
+
+This backend is used by default so if you use the system as above, you're using it. But if you want to put in the configuration file or in the `start_link` function explicitly, you can do it as follow:
+
+```erlang
+forseti:start_link(gen_leader, Call, Nodes)
+```
+
+Or in the configuration file:
+
+```erlang
+{forseti, [
+    {backend, gen_leader},
+    {nodes, [nodes()]},
+    {call, mfa()}
+]}
+```
+
+### mnesia
+
+As is implemented in `ejabberd`, you can use `mnesia` as the store for the processes. This backend lets you add and remove nodes from the cluster without restart the whole cluster. The worst part is the latency. If you plan to use forseti for high load requesting location for processes, creating and removing processes, perhaps you should use another backend.
+
+> **IMPORTANT**: with Mnesia you have the possibility to use two methods: transaction or dirty. If you select *transaction* the latency should be higher but the consistency too. If you select *dirty* the consistency could be broken, but the latency will be lower.
+
+To use this backend:
+
+```erlang
+forseti:start_link(mnesia, Call, Nodes)
+```
+
+If you want to configure `transaction` or `dirty` you can use:
+
+```erlang
+forseti_mnesia:set_method(dirty)
+```
+
+The default behaviour is `transaction`.
+
+In configuration file:
+
+```erlang
+{forseti, [
+    {backend, mnesia},
+    {mnesia, [
+        {method, dirty | transaction}
+    ]},
+    {nodes, [nodes()]},
+    {call, mfa()}
+]}
+```
