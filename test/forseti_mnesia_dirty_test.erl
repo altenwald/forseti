@@ -193,7 +193,7 @@ lock_test(_) ->
             {_Node,PID} = rpc:call(?NODE1, forseti, get_key, [Key]),
             PID ! ok
         end, lists:seq(1,4)),
-        timer:sleep(1000),
+        timer:sleep(2500),
         EmptyNodes = rpc:call(?NODE3, forseti, get_metrics, []),
         ?debugFmt("metrics: ~p~n", [EmptyNodes]),
         0 =:= proplists:get_value(?NODE1, EmptyNodes) andalso
