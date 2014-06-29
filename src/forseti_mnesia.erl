@@ -193,18 +193,11 @@ get_key(transaction, Key, M, F, Params) ->
     Result;
 
 get_key(dirty, Key, M, F, Params) ->
-    case find_key(dirty, Key) of
-    {Node,PID} ->
-        case forseti_lib:is_alive(Node, PID) of
-        true ->
-            {Node,PID};
-        false ->
-            ?debugFmt("process DIE! ~p in ~p, regenerating...", [PID,Node]),
-            generate_process(dirty,Key,M,F,Params)
-        end;
-    undefined ->
-        generate_process(dirty,Key,M,F,Params)
-    end.
+    %% TODO: this operation is very DANGEROUS because can generate a lot
+    %%       of processes with the same 'key' and you lost the first of
+    %%       them. It should be developed with a global lock... but I think
+    %%       it's easiest, by the moment, use only transaction.
+    get_key(transaction, Key, M, F, Params).
 
 -spec release(method(), node(), key()) -> ok.
 
