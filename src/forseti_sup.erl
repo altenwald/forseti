@@ -34,8 +34,15 @@ start_link(Backend, MaxR, MaxT, Call, Nodes) ->
 %% @end
 %%--------------------------------------------------------------------
 init([Backend, MaxR, MaxT, Call, Nodes]) ->
-	Module = forseti_app:get_mod_backend(Backend),
-    {ok, {{one_for_all, MaxR, MaxT}, [
-    	?CHILD(Module, [Call, Nodes]),
-        ?CHILD(forseti_server, [])
-    ]}}.
+    Module = forseti_app:get_mod_backend(Backend),
+    Children = servers(Module, Call, Nodes),
+    {ok, {{one_for_all, MaxR, MaxT}, Children}}.
+
+servers(forseti_leader, Call, Nodes) -> [
+    ?CHILD(forseti_server, []),
+    ?CHILD(forseti_leader, [Call, Nodes])
+];
+
+servers(Module, Call, Nodes) -> [
+    ?CHILD(Module, [Call, Nodes])
+].

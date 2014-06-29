@@ -32,8 +32,9 @@
 -export([
     choose_node/0,
     get_metrics/0,
-    get_key/3,
-    search_key/2
+    get_key/1,
+    get_key/2,
+    search_key/1
 ]).
 
 -record(state, {
@@ -79,19 +80,22 @@ choose_node() ->
 get_metrics() ->
     gen_leader:call(?MODULE, get_metrics).
 
+-spec get_key(Key::term()) -> {node(), pid()} | {error, Reason::atom()}.
+
+get_key(Key) ->
+    gen_server:call(forseti_server, {get_key, Key}).
+
 -spec get_key(
-    Key::term(), Args::[term()], From::{pid(),reference()}) -> 
+    Key::term(), Args::[term()]) -> 
     {node(), pid()} | {error, Reason::atom()}.
 
-get_key(Key, Args, From) ->
-    gen_leader:leader_cast(?MODULE, {get_key, Key, Args, From}).
+get_key(Key, Args) ->
+    gen_server:call(forseti_server, {get_key, Key, Args}).
 
--spec search_key(
-    Key::term(), From::{pid(), reference()}) ->
-    {node(), pid()} | undefined.
+-spec search_key(Key::term()) -> {node(), pid()} | undefined.
 
-search_key(Key, From) ->
-    gen_leader:leader_cast(?MODULE, {search, Key, From}).
+search_key(Key) ->
+    gen_server:call(forseti_server, {search, Key}).
 
 %% ------------------------------------------------------------------
 %% gen_leader Function Definitions

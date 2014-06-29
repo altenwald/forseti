@@ -38,7 +38,8 @@ get_less_used_node() ->
 -spec search_key(Key :: any()) -> {Node :: node(), PID :: pid()} | undefined.
 
 search_key(Key) ->
-    gen_server:call(forseti_server, {search, Key}).
+    Module = forseti_app:get_mod_backend(),
+    Module:search_key(Key).
 
 -type node_metrics() :: {node(), integer()}.
 
@@ -51,10 +52,12 @@ get_metrics() ->
 -spec get_key(Key :: any()) -> pid() | {error, Reason::atom()}.
 
 get_key(Key) ->
-    gen_server:call(forseti_server, {get_key, Key}).
+    Module = forseti_app:get_mod_backend(),
+    Module:get_key(Key).
 
 -spec get_key(Key :: any(), Args :: [term()]) ->
     pid() | {error, Reason::atom()}.
 
 get_key(Key, Args) ->
-    gen_server:call(forseti_server, {get_key, Key, Args}).
+    Module = forseti_app:get_mod_backend(),
+    Module:get_key(Key, Args).

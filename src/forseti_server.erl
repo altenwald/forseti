@@ -60,26 +60,24 @@ handle_call({get_key, Key}, From, State) ->
     handle_call({get_key, Key, []}, From, State);
 
 handle_call({get_key, Key, Args}, From, #state{keys=Keys}=State) ->
-    Module = forseti_app:get_mod_backend(),
     case dict:find(Key, Keys) of
     error ->
-        Module:get_key(Key, Args, From),
+        gen_leader:leader_cast(forseti_leader, {get_key, Key, Args, From}),
         {noreply, State};
     {ok, {Node,PID}} ->
         case check(node(), Node, PID) of
         true ->
             {reply, {ok,PID}, State};
         _ ->
-            Module:get_key(Key, Args, From),
+            gen_leader:leader_cast(forseti_leader, {get_key, Key, Args, From}),
             {noreply, State}
         end
     end;
 
 handle_call({search, Key}, From, #state{keys=Keys}=State) ->
-    Module = forseti_app:get_mod_backend(),
     case dict:find(Key, Keys) of
     error ->
-        Module:search_key(Key, From),
+        gen_leader:leader_cast(forseti_leader, {search, Key, From}),
         {noreply, State}; 
     {ok, {Node,PID}} ->
         {reply, {Node,PID}, State}
