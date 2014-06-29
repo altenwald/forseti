@@ -3,7 +3,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--define(PROCESSES, 999).
+-define(PROCESSES, 99).
 
 -define(NODE_TEST, forseti_mnesia@localhost).
 
