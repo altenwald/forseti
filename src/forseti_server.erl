@@ -1,4 +1,6 @@
 -module(forseti_server).
+-author('manuel@altenwald.com').
+
 -behaviour(gen_server).
 
 -define(SERVER, ?MODULE).

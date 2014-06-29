@@ -1,4 +1,6 @@
 -module(forseti_leader).
+-author('manuel@altenwald.com').
+
 -behaviour(gen_leader).
 
 -define(SERVER, ?MODULE).
@@ -25,6 +27,14 @@
     from_leader/3,
     code_change/4,
     terminate/2
+]).
+
+-export([
+    choose_node/0,
+    get_metrics/0,
+    get_key/1,
+    get_key/2,
+    search_key/1
 ]).
 
 -record(state, {
@@ -59,6 +69,33 @@ start_link({_M,_F,_A}=Launch, Nodes) ->
 
 stop() ->
     gen_leader:call(?MODULE, stop).
+
+-spec choose_node() -> node().
+
+choose_node() ->
+    gen_leader:call(?MODULE, choose_node).
+
+-spec get_metrics() -> [{node(), pos_integer()}].
+
+get_metrics() ->
+    gen_leader:call(?MODULE, get_metrics).
+
+-spec get_key(Key::term()) -> {node(), pid()} | {error, Reason::atom()}.
+
+get_key(Key) ->
+    gen_server:call(forseti_server, {get_key, Key}).
+
+-spec get_key(
+    Key::term(), Args::[term()]) -> 
+    {node(), pid()} | {error, Reason::atom()}.
+
+get_key(Key, Args) ->
+    gen_server:call(forseti_server, {get_key, Key, Args}).
+
+-spec search_key(Key::term()) -> {node(), pid()} | undefined.
+
+search_key(Key) ->
+    gen_server:call(forseti_server, {search, Key}).
 
 %% ------------------------------------------------------------------
 %% gen_leader Function Definitions
@@ -105,21 +142,21 @@ handle_leader_cast({get_key,Key,NewArgs,From}, #state{
         error -> {undefined, undefined};
         {ok,{N,P}} -> {N,P}
     end,
-    case check(node(), Node, PID) of
+    case forseti_lib:is_alive(Node, PID) of
     true ->
         gen_server:reply(From, {ok, PID}),
         {noreply, State};
     _ ->
         try
-            NewNode = choose_node(NK,Nodes),
-            Params = [Key|NewArgs] ++ Args,
-            NewPID = case rpc:call(NewNode, Module, Function, Params) of
-                {ok, _Node, NewP} -> 
-                    NewP;
+            Params = [Key|Args] ++ NewArgs,
+            {NewNode, NewPID} = case rpc:call(
+                    choose_node(NK,Nodes), Module, Function, Params) of
+                {ok, RetNode, NewP} -> 
+                    {RetNode, NewP};
                 {ok, NewP} -> 
-                    NewP;
+                    {node(NewP), NewP};
                 {error, {already_started,OldP}} -> 
-                    OldP;
+                    {node(OldP), OldP};
                 {error, _Reason} ->
                     throw(enoproc)
             end,
@@ -246,12 +283,6 @@ code_change(_OldVsn, State, _Election, _Extra) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
-
-check(_MyNode, undefined, _PID) -> false;
-check(_MyNode, _Node, undefined) -> false;
-check(Node, Node, PID) -> is_process_alive(PID);
-check(_MyNode, Node, PID) -> 
-    catch rpc:call(Node, erlang, is_process_alive, [PID]).
 
 choose_node(NK, Nodes) ->
     A = Nodes,
