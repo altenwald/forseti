@@ -29,7 +29,6 @@
 -define(debugFmt(A,B), (ok)).
 -endif.
 
--type method() :: transaction | dirty.
 -type key() :: term().
 
 -record(forseti_processes, {
@@ -52,15 +51,14 @@ start_link(Call, Nodes) ->
 -spec choose_node() -> node().
 
 choose_node() ->
-    ActiveFull = get_metrics(),
     KeyMin = lists:foldl(fun
-        ({Key,Val},{KeyMin,ValMin}) when Val < ValMin ->
+        ({Key,Val},{_KeyMin,ValMin}) when Val < ValMin ->
             {Key,Val};
         ({_Key,_Val},{KeyMin,ValMin}) ->
             {KeyMin,ValMin};
         ({Key,Val},undefined) ->
             {Key,Val}
-    end, undefined, ActiveFull),
+    end, undefined, get_metrics()),
     case KeyMin of
         undefined -> node();
         {K,_} -> K
@@ -69,9 +67,20 @@ choose_node() ->
 -spec get_metrics() -> [{node(), pos_integer()}].
 
 get_metrics() ->
-    MnesiaConf = application:get_env(forseti, mnesia, []),
-    Method = proplists:get_value(method, MnesiaConf, transaction),
-    get_metrics(Method).
+    Active = [node()|nodes()],
+    {atomic, ActiveFull} = mnesia:transaction(fun() ->
+        lists:foldl(fun(Node, NK) ->
+            case lists:member(Node, Active) of
+            true ->
+                [#forseti_nodes{node=N,proc_len=L}] = 
+                    mnesia:read(forseti_nodes, Node),
+                [{N, L}|NK];
+            false ->
+                NK
+            end
+        end, [], mnesia:all_keys(forseti_nodes))
+    end),
+    ActiveFull.
 
 -spec get_key(Key::term()) -> {node(), pid()} | {error, Reason::atom()}.
 
@@ -82,18 +91,32 @@ get_key(Key) ->
     {node(), pid()} | {error, Reason::atom()}.
 
 get_key(Key, Args) ->
-    MnesiaConf = application:get_env(forseti, mnesia, []),
     {ok, {M,F,A}} = application:get_env(forseti, call),
-    Method = proplists:get_value(method, MnesiaConf, transaction),
     Params = [Key|A] ++ Args,
-    get_key(Method, Key, M, F, Params).
+    {atomic, Result} = mnesia:transaction(fun() -> 
+        case find_key(Key) of
+        {Node,PID} ->
+            case forseti_lib:is_alive(Node, PID) of
+            true ->
+                {Node,PID};
+            false ->
+                ?debugFmt("process DIE! ~p in ~p, regenerating...", [PID,Node]),
+                generate_process(Key,M,F,Params)
+            end;
+        undefined ->
+            mnesia:write_lock_table(forseti_processes), 
+            generate_process(Key,M,F,Params)
+        end
+    end),
+    Result.
 
 -spec search_key(Key::term()) -> {node(), pid()} | undefined.
 
 search_key(Key) ->
-    MnesiaConf = application:get_env(forseti, mnesia, []),
-    Method = proplists:get_value(method, MnesiaConf, transaction),
-    find_key(Method, Key).
+    {atomic, Reply} = mnesia:transaction(fun() ->
+        find_key(Key)
+    end),
+    Reply.
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
@@ -114,11 +137,9 @@ handle_cast({link,PID}, State) ->
     {noreply, State}.
 
 handle_info({'EXIT', PID, _Info}, State) ->
-    MnesiaConf = application:get_env(forseti, mnesia, []),
-    Method = proplists:get_value(method, MnesiaConf, transaction),
     ?debugFmt("release pid=~p (from node=~p) by node=~p",
         [PID, node(PID), node()]),
-    release(Method, node(PID), PID),
+    release(node(PID), PID),
     {noreply, State};
 
 handle_info(_Info, State) ->
@@ -170,38 +191,9 @@ init_db([Node|Nodes]) ->
             init_db(Nodes)
     end.
 
-get_key(transaction, Key, M, F, Params) ->
-    {atomic, Result} = mnesia:transaction(fun() -> 
-        FindKey = case mnesia:read(forseti_processes, Key) of
-            [#forseti_processes{node=N, process=P}] -> {N,P};
-            _ -> undefined
-        end,
-        case FindKey of
-        {Node,PID} ->
-            case forseti_lib:is_alive(Node, PID) of
-            true ->
-                {Node,PID};
-            false ->
-                ?debugFmt("process DIE! ~p in ~p, regenerating...", [PID,Node]),
-                generate_process(transaction,Key,M,F,Params)
-            end;
-        undefined ->
-            mnesia:write_lock_table(forseti_processes), 
-            generate_process(transaction,Key,M,F,Params)
-        end
-    end),
-    Result;
+-spec release(node(), key()) -> ok.
 
-get_key(dirty, Key, M, F, Params) ->
-    %% TODO: this operation is very DANGEROUS because can generate a lot
-    %%       of processes with the same 'key' and you lost the first of
-    %%       them. It should be developed with a global lock... but I think
-    %%       it's easiest, by the moment, use only transaction.
-    get_key(transaction, Key, M, F, Params).
-
--spec release(method(), node(), key()) -> ok.
-
-release(transaction, Node, PID) ->
+release(Node, PID) ->
     {atomic, ok} = mnesia:transaction(fun() ->
         Match = [{
             #forseti_processes{key = '$1',node = '$2',process = '$3'},
@@ -214,62 +206,32 @@ release(transaction, Node, PID) ->
         ?debugFmt("release from mnesia(transaction): ~p", [FN]),
         mnesia:write(FN#forseti_nodes{proc_len=PL-1})
     end),
-    ok;
-
-release(dirty, Node, PID) ->
-    Match = [{
-        #forseti_processes{key = '$1',node = '$2',process = '$3'},
-        [{'andalso',{'=:=','$2',Node},{'=:=','$3',PID}}],
-        ['$1']
-    }],
-    [Key] = mnesia:dirty_select(forseti_processes, Match),
-    mnesia:dirty_delete({forseti_processes, Key}),
-    [#forseti_nodes{proc_len=PL}=FN] = 
-        mnesia:dirty_read(forseti_nodes, Node),
-    mnesia:dirty_write(FN#forseti_nodes{proc_len=PL-1}),
     ok.
 
--spec find_key(method(), key()) -> {node(), pid()} | undefined.
-
-find_key(transaction, Key) ->
-    {atomic, Reply} = mnesia:transaction(fun() ->
-        case mnesia:read(forseti_processes, Key) of
-            [#forseti_processes{node=N, process=P}] -> {N,P};
-            _ -> undefined
-        end
-    end),
-    Reply;
-
-find_key(dirty, Key) ->
-    case mnesia:dirty_read(forseti_processes, Key) of
-        [#forseti_processes{node=N, process=P}] -> {N,P};
-        _ -> undefined
-    end.
-
--spec generate_process(method(), key(), M::atom(), F::atom(), A::[term()]) ->
+-spec generate_process(key(), M::atom(), F::atom(), A::[term()]) ->
     {node(), pid()}.
 
-generate_process(Method, Key, M, F, A) ->
+generate_process(Key, M, F, A) ->
     Node = choose_node(),
     case rpc:call(Node, M, F, A) of
     {ok, RetNode, NewP} ->
-        store_process(Method, Key, RetNode, NewP),
+        store_process(Key, RetNode, NewP),
         gen_server:cast({?MODULE, RetNode}, {link, NewP}),
         {RetNode, NewP};
     {ok, NewP} ->
-        store_process(Method, Key, node(NewP), NewP),
+        store_process(Key, node(NewP), NewP),
         gen_server:cast({?MODULE, node(NewP)}, {link, NewP}),
         {node(NewP), NewP};
     {error, {already_started,OldP}} ->
-        store_process(Method, Key, node(OldP), OldP),
+        store_process(Key, node(OldP), OldP),
         {node(OldP), OldP};
-    Error ->
+    _Error ->
         {error, enoproc}
     end.
 
--spec store_process(method(), key(), node(), pid()) -> ok.
+-spec store_process(key(), node(), pid()) -> ok.
 
-store_process(transaction, Key, Node, PID) ->
+store_process(Key, Node, PID) ->
     mnesia:write(#forseti_processes{key=Key, node=Node, process=PID}),
     case mnesia:read(forseti_nodes, Node) of
     [#forseti_nodes{proc_len=PL}=FN] ->
@@ -277,45 +239,12 @@ store_process(transaction, Key, Node, PID) ->
     [] ->
         mnesia:write(#forseti_nodes{node=Node, proc_len=1})
     end,
-    ok;
-
-store_process(dirty, Key, Node, PID) ->
-    mnesia:dirty_write(#forseti_processes{key=Key, node=Node, process=PID}),
-    case mnesia:dirty_read(forseti_nodes, Node) of
-    [#forseti_nodes{proc_len=PL}=FN] ->
-        mnesia:dirty_write(FN#forseti_nodes{proc_len=PL+1});
-    [] ->
-        mnesia:dirty_write(#forseti_nodes{node=Node, proc_len=1})
-    end,
     ok.
 
--spec get_metrics(method()) -> [{node(), pos_integer()}].
+-spec find_key(key()) -> {node(), pid()} | undefined.
 
-get_metrics(dirty) ->
-    Active = [node()|nodes()],
-    lists:foldl(fun(Node, NK) ->
-        case lists:member(Node, Active) of
-        true ->
-            [#forseti_nodes{node=N,proc_len=L}] = 
-                mnesia:dirty_read(forseti_nodes, Node),
-            [{N, L}|NK];
-        false ->
-            NK
-        end
-    end, [], mnesia:dirty_all_keys(forseti_nodes));
-
-get_metrics(transaction) ->
-    Active = [node()|nodes()],
-    {atomic, ActiveFull} = mnesia:transaction(fun() ->
-        lists:foldl(fun(Node, NK) ->
-            case lists:member(Node, Active) of
-            true ->
-                [#forseti_nodes{node=N,proc_len=L}] = 
-                    mnesia:read(forseti_nodes, Node),
-                [{N, L}|NK];
-            false ->
-                NK
-            end
-        end, [], mnesia:all_keys(forseti_nodes))
-    end),
-    ActiveFull.
+find_key(Key) ->
+    case mnesia:read(forseti_processes, Key) of
+        [#forseti_processes{node=N, process=P}] -> {N,P};
+        _ -> undefined
+    end.

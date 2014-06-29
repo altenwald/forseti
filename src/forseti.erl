@@ -3,6 +3,7 @@
 
 -export([
     start_link/2,
+    start_link/3,
     start_link/4,
     start_link/5,
 
@@ -17,6 +18,9 @@
 
 start_link(Call, Nodes) ->
     start_link(gen_leader, ?MAX_RETRIES, ?MAX_TIME, Call, Nodes).
+
+start_link(Backend, Call, Nodes) ->
+    start_link(Backend, ?MAX_RETRIES, ?MAX_TIME, Call, Nodes).
 
 start_link(MaxR, MaxT, Call, Nodes) ->
     start_link(gen_leader, MaxR, MaxT, Call, Nodes).

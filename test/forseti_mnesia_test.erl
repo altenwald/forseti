@@ -71,7 +71,7 @@ start() ->
     spawn(?NODE1, fun() ->
         mnesia:stop(),
         mnesia:delete_schema([node()]),
-        forseti:start_link(mnesia, 20, 10, Call, Nodes),
+        forseti:start_link(mnesia, Call, Nodes),
         ParentPID ! ok,
         receive ok -> ok end
     end),
@@ -79,7 +79,7 @@ start() ->
     spawn(?NODE2, fun() -> 
         mnesia:stop(),
         mnesia:delete_schema([node()]),
-        forseti:start_link(mnesia, 20, 10, Call, Nodes),
+        forseti:start_link(mnesia, Call, Nodes),
         ParentPID ! ok,
         receive ok -> ok end
     end),
@@ -87,7 +87,7 @@ start() ->
     spawn(?NODE3, fun() -> 
         mnesia:stop(),
         mnesia:delete_schema([node()]),
-        forseti:start_link(mnesia, 20, 10, Call, Nodes),
+        forseti:start_link(mnesia, Call, Nodes),
         ParentPID ! ok,
         receive ok -> ok end
     end),

@@ -102,30 +102,17 @@ Or in the configuration file:
 
 As is implemented in `ejabberd`, you can use `mnesia` as the store for the processes. This backend lets you add and remove nodes from the cluster without restart the whole cluster. The worst part is the latency. If you plan to use forseti for high load requesting location for processes, creating and removing processes, perhaps you should use another backend.
 
-> **IMPORTANT**: with Mnesia you have the possibility to use two methods: transaction or dirty. If you select *transaction* the latency should be higher but the consistency too. If you select *dirty* the consistency could be broken, but the latency will be lower.
-
 To use this backend:
 
 ```erlang
 forseti:start_link(mnesia, Call, Nodes)
 ```
 
-If you want to configure `transaction` or `dirty` you can use:
-
-```erlang
-forseti_mnesia:set_method(dirty)
-```
-
-The default behaviour is `transaction`.
-
 In configuration file:
 
 ```erlang
 {forseti, [
     {backend, mnesia},
-    {mnesia, [
-        {method, dirty | transaction}
-    ]},
     {nodes, [nodes()]},
     {call, mfa()}
 ]}
