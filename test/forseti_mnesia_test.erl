@@ -3,7 +3,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--define(PROCESSES, 999).
+-define(PROCESSES, 99).
 
 -define(NODE_TEST, forseti_mnesia@localhost).
 
@@ -62,8 +62,6 @@ start() ->
     slave:start(localhost, ?NODE1_SHORT),
     slave:start(localhost, ?NODE2_SHORT),
     slave:start(localhost, ?NODE3_SHORT),
-
-    %application:set_env(forseti, mnesia, [{method, dirty}]),
 
     Call = {forseti_mnesia_test, start_link, []},
     Nodes = nodes(),
