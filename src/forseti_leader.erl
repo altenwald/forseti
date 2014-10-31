@@ -1,4 +1,6 @@
 -module(forseti_leader).
+-author('manuel@altenwald.com').
+
 -behaviour(gen_leader).
 
 -define(SERVER, ?MODULE).
@@ -25,6 +27,14 @@
     from_leader/3,
     code_change/4,
     terminate/2
+]).
+
+-export([
+    choose_node/0,
+    get_metrics/0,
+    get_key/1,
+    get_key/2,
+    search_key/1
 ]).
 
 -record(state, {
@@ -59,6 +69,33 @@ start_link({_M,_F,_A}=Launch, Nodes) ->
 
 stop() ->
     gen_leader:call(?MODULE, stop).
+
+-spec choose_node() -> node().
+
+choose_node() ->
+    gen_leader:call(?MODULE, choose_node).
+
+-spec get_metrics() -> [{node(), pos_integer()}].
+
+get_metrics() ->
+    gen_leader:call(?MODULE, get_metrics).
+
+-spec get_key(Key::term()) -> {node(), pid()} | {error, Reason::atom()}.
+
+get_key(Key) ->
+    gen_server:call(forseti_server, {get_key, Key}).
+
+-spec get_key(
+    Key::term(), Args::[term()]) -> 
+    {node(), pid()} | {error, Reason::atom()}.
+
+get_key(Key, Args) ->
+    gen_server:call(forseti_server, {get_key, Key, Args}).
+
+-spec search_key(Key::term()) -> {node(), pid()} | undefined.
+
+search_key(Key) ->
+    gen_server:call(forseti_server, {search, Key}).
 
 %% ------------------------------------------------------------------
 %% gen_leader Function Definitions
@@ -98,25 +135,28 @@ handle_leader_cast({search, Key, From}, #state{keys=Keys}=State, _Election) ->
         {noreply, State}
     end;
 
-handle_leader_cast({get_key,Key,From}, #state{
+handle_leader_cast({get_key,Key,NewArgs,From}, #state{
         keys=Keys, node_keys=NK, nodes=Nodes,
         module=Module, function=Function, args=Args}=State, _Election) ->
     {Node,PID} = case dict:find(Key, Keys) of
         error -> {undefined, undefined};
         {ok,{N,P}} -> {N,P}
     end,
-    case check(node(), Node, PID) of
+    case forseti_lib:is_alive(Node, PID) of
     true ->
         gen_server:reply(From, {ok, PID}),
         {noreply, State};
     _ ->
         try
-            NewNode = choose_node(NK,Nodes),
-            NewPID = case rpc:call(NewNode, Module, Function, [Key|Args]) of
+            Params = [Key|Args] ++ NewArgs,
+            {NewNode, NewPID} = case rpc:call(
+                    choose_node(NK,Nodes), Module, Function, Params) of
+                {ok, RetNode, NewP} -> 
+                    {RetNode, NewP};
                 {ok, NewP} -> 
-                    NewP;
+                    {node(NewP), NewP};
                 {error, {already_started,OldP}} -> 
-                    OldP;
+                    {node(OldP), OldP};
                 {error, _Reason} ->
                     throw(enoproc)
             end,
@@ -124,14 +164,12 @@ handle_leader_cast({get_key,Key,From}, #state{
             NewNK = increment(NewNode, NK),
             NewState = State#state{node_keys=NewNK,keys=NewKeys},
             gen_server:reply(From, {ok, NewPID}),
-            gen_server:cast(forseti_server, {keys, NewKeys}),
+            gen_server:cast(forseti_server, {add, Key, {NewNode,NewPID}}),
             case NewNode =:= node() of
-            true ->
-                link(NewPID),
-                {ok, NewState, NewState};
-            false ->
-                {ok, {NewState, {link, NewNode, NewPID}}, NewState}
-            end
+                true -> link(NewPID);
+                false -> ok
+            end,
+            {ok, {add, Key, {NewNode, NewPID}, NewNK}, NewState}
         catch 
             % the remote node is falling down, repeat the action
             _:{badmatch,{badrpc,_}} ->
@@ -147,30 +185,42 @@ handle_leader_cast({get_key,Key,From}, #state{
     end;
 
 handle_leader_cast({free,Node,PID}, #state{node_keys=NK, keys=Keys}=State, _Election) ->
-    NewKeys = dict:filter(fun
-        (_K,{_N,P}) when P =:= PID -> false;
-        (_K, _V) -> true
-    end, Keys),
-    NewNK = case dict:find(Node, NK) of
-        error -> NK;
-        {ok,Value} -> dict:store(Node, Value-1, NK)
-    end,
-    NewState = State#state{node_keys=NewNK, keys=NewKeys},
-    gen_server:cast(forseti_server, {keys, NewKeys}),
-    {ok, NewState, NewState};
+    Key = dict:fold(fun
+        (K,{N,P},undefined) when N =:= Node andalso P =:= PID -> K;
+        (_,_,P) -> P
+    end, undefined, Keys),
+    case Key of
+    undefined -> 
+        {ok, State};
+    Key ->
+        NewKeys = dict:erase(Key, Keys),
+        NewNK = case dict:find(Node, NK) of
+            error -> NK;
+            {ok,Value} -> dict:store(Node, Value-1, NK)
+        end,
+        NewState = State#state{node_keys=NewNK, keys=NewKeys},
+        gen_server:cast(forseti_server, {del, Key}),
+        {ok, {del, Key, NewNK}, NewState}
+    end;
 
 handle_leader_cast(_Request, State, _Election) ->
     {noreply, State}.
  
 
-from_leader({#state{}=State, {link,Node,PID}}, _OldState, _Election) when Node =:= node() ->
-    link(PID),
-    gen_server:cast(forseti_server, {keys, State#state.keys}),
-    {ok, State};
+from_leader({del, Key, NodeKeys}, #state{keys=Keys}=State, _Election) ->
+    gen_server:cast(forseti_server, {del, Key}),
+    {ok, State#state{node_keys=NodeKeys, keys=dict:erase(Key, Keys)}};
 
-from_leader({#state{}=State, {link,_Node,_PID}}, _OldState, _Election) ->
-    gen_server:cast(forseti_server, {keys, State#state.keys}),
-    {ok, State};
+from_leader({add, Key, {Node, PID}=Value, NodeKeys}, 
+        #state{keys=Keys}=State, _Election) when Node =:= node() ->
+    link(PID),
+    gen_server:cast(forseti_server, {add, Key, {Node, PID}}),
+    {ok, State#state{node_keys=NodeKeys, keys=dict:store(Key, Value, Keys)}};
+
+from_leader({add, Key, {Node, PID}=Value, NodeKeys}, 
+        #state{keys=Keys}=State, _Election) ->
+    gen_server:cast(forseti_server, {add, Key, {Node, PID}}),
+    {ok, State#state{node_keys=NodeKeys, keys=dict:store(Key, Value, Keys)}};
 
 from_leader(#state{}=State, _OldState, _Election) ->
     gen_server:cast(forseti_server, {keys, State#state.keys}),
@@ -233,12 +283,6 @@ code_change(_OldVsn, State, _Election, _Extra) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
-
-check(_MyNode, undefined, _PID) -> false;
-check(_MyNode, _Node, undefined) -> false;
-check(Node, Node, PID) -> is_process_alive(PID);
-check(_MyNode, Node, PID) -> 
-    catch rpc:call(Node, erlang, is_process_alive, [PID]).
 
 choose_node(NK, Nodes) ->
     A = Nodes,

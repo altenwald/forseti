@@ -1,4 +1,5 @@
 -module(forseti_app).
+-author('manuel@altenwald.com').
 
 -behaviour(application).
 
@@ -8,53 +9,48 @@
     stop/1
 ]).
 
--include("../include/forseti.hrl").
+% public API
+-export([
+    get_mod_backend/0,
+    get_mod_backend/1
+]).
+
+-include("forseti.hrl").
 
 %%%===================================================================
 %%% Application callbacks
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% This function is called whenever an application is started using
-%% application:start/[1,2], and should start the processes of the
-%% application. If the application is structured according to the OTP
-%% design principles as a supervision tree, this means starting the
-%% top supervisor of the tree.
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec(start(StartType :: normal | {takeover, node()} | {failover, node()},
+-spec start(StartType :: normal | {takeover, node()} | {failover, node()},
     StartArgs :: term()) ->
     {ok, pid()} |
     {ok, pid(), State :: term()} |
-    {error, Reason :: term()}).
+    {error, Reason :: term()}.
 start(_StartType, _StartArgs) ->
-    Conf = application:get_all_env(),
+    Conf = application:get_all_env(forseti),
     MaxRetries = proplists:get_value(max_retries, Conf, ?MAX_RETRIES),
     MaxTime = proplists:get_value(max_time, Conf, ?MAX_RETRIES),
     Call = proplists:get_value(call, Conf),
     Nodes = proplists:get_value(nodes, Conf, [node()]),
+    Backend = proplists:get_value(backend, Conf, gen_leader),
     case Call of
-        undefined ->
-            {error, <<"call undefined">>};
-        _ ->
-            forseti_sup:start_link(MaxRetries, MaxTime, Call, Nodes)
+    undefined ->
+        {ok, self()};
+    _ ->
+        forseti_sup:start_link(Backend, MaxRetries, MaxTime, Call, Nodes)
     end.
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% This function is called whenever an application has stopped. It
-%% is intended to be the opposite of Module:start/2 and should do
-%% any necessary cleaning up. The return value is ignored.
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec(stop(State :: term()) -> term()).
+-spec stop(State :: term()) -> term().
 stop(_State) ->
     ok.
+
+-spec get_mod_backend() -> atom().
+get_mod_backend() ->
+    get_mod_backend(application:get_env(forseti, backend, gen_leader)).
+
+-spec get_mod_backend(atom()) -> atom().
+get_mod_backend(gen_leader) -> forseti_leader;
+get_mod_backend(mnesia) -> forseti_mnesia.
 
 %%%===================================================================
 %%% Internal functions
