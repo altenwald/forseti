@@ -46,11 +46,14 @@ stop(_State) ->
 
 -spec get_mod_backend() -> atom().
 get_mod_backend() ->
-    get_mod_backend(application:get_env(forseti, backend, gen_leader)).
+    get_mod_backend(application:get_env(forseti, backend)).
 
--spec get_mod_backend(atom()) -> atom().
+-spec get_mod_backend(atom() | {ok, atom()}) -> atom().
 get_mod_backend(gen_leader) -> forseti_leader;
-get_mod_backend(mnesia) -> forseti_mnesia.
+get_mod_backend(mnesia) -> forseti_mnesia;
+get_mod_backend({ok, gen_leader}) -> forseti_leader;
+get_mod_backend({ok, mnesia}) -> forseti_mnesia;
+get_mod_backend(undefined) -> forseti_leader.
 
 %%%===================================================================
 %%% Internal functions
