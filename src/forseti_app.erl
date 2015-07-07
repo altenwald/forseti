@@ -51,8 +51,10 @@ get_mod_backend() ->
 -spec get_mod_backend(atom() | {ok, atom()}) -> atom().
 get_mod_backend(gen_leader) -> forseti_leader;
 get_mod_backend(mnesia) -> forseti_mnesia;
+get_mod_backend(locks) -> forseti_locks;
 get_mod_backend({ok, gen_leader}) -> forseti_leader;
 get_mod_backend({ok, mnesia}) -> forseti_mnesia;
+get_mod_backend({ok, locks}) -> forseti_locks;
 get_mod_backend(undefined) -> forseti_leader.
 
 %%%===================================================================
