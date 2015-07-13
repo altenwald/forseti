@@ -117,3 +117,21 @@ In configuration file:
     {call, mfa()}
 ]}
 ```
+
+### locks
+
+A scalable, deadlock-resolving resource locker, based on an algorithm designed by Ulf Wiger. With this backend you can add a new nodes without shutdown the cluster, but you need to start the system with one single node, after you can add more nodes.
+
+To use this backend:
+```erlang
+forseti:start_link(locks, Call, Nodes)
+```
+In configuration file:
+
+```erlang
+{forseti, [
+    {backend, locks},
+    {nodes, [nodes()]},
+    {call, mfa()}
+]}
+```
