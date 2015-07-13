@@ -1,5 +1,5 @@
 language: erlang
-script  : "./rebar get-deps compile && ./rebar skip_deps=true eunit"
+script  : "./rebar get-deps compile && ./rebar skip_deps=true eunit suites=forseti_leader_test && ./rebar skip_deps=true eunit suites=forseti_mnesia_test && ./rebar skip_deps=true eunit suites=forseti_locks_test"
 otp_release:
    - 17.0
    - 17.1
