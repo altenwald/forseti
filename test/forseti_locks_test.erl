@@ -13,6 +13,9 @@
 -define(NODE2_SHORT, forseti2_leader).
 -define(NODE3_SHORT, forseti3_leader).
 
+-define(NODES_T, [?NODE1, ?NODE2, ?NODE3]).
+
+
 %% -- code for the pool
 
 start_link(<<"delay",_/integer>>) ->
@@ -33,6 +36,7 @@ start_link(_Key) ->
     end)}.
 
 start_link(_Key, arg1, arg2, arg3) ->
+    ?debugFmt("start_link args ~n ", []),
     {ok, spawn_link(fun() ->
         receive _ -> ok end
     end)}.
@@ -40,6 +44,7 @@ start_link(_Key, arg1, arg2, arg3) ->
 %% -- generator
 
 generator_test_() ->
+    ?debugFmt("Init generator test ~n ", []),
     {foreach,
         fun start/0,
         fun stop/1, [
@@ -55,19 +60,25 @@ generator_test_() ->
 %% -- initilizer and finisher
 
 start() ->
+    ?debugFmt("START ~n", []),
     net_kernel:start([?NODE1, shortnames]),
-    slave:start(localhost, ?NODE2_SHORT),
-    slave:start(localhost, ?NODE3_SHORT),
+%    slave:start(localhost, ?NODE2_SHORT),
+ %   slave:start(localhost, ?NODE3_SHORT),
 
     Call = {?MODULE, start_link, []},
-    Nodes = [node()|nodes()],
+    %Nodes = [node()|nodes()],
+    Nodes = ?NODES_T,
     ?debugFmt("configuring nodes = ~p~n", [Nodes]),
     timer:sleep(1000),
     forseti:start_link(locks, Call, Nodes),
+    slave:start(localhost, ?NODE2_SHORT),
+    timer:sleep(1000),
     spawn(?NODE2, fun() -> 
         forseti:start_link(locks, Call, Nodes),
         receive ok -> ok end
     end),
+    slave:start(localhost, ?NODE3_SHORT),
+    timer:sleep(1000),
     spawn(?NODE3, fun() -> 
         forseti:start_link(locks, Call, Nodes),
         receive ok -> ok end
@@ -84,6 +95,7 @@ stop(_) ->
 %% -- tests
 
 basic_test(_) ->
+    ?debugFmt("basic_tests ~n", []),
     ?_assert(begin
         ?assertEqual(undefined, forseti:search_key(<<"notfound">>)),
         ?assertMatch({_Node,_PID}, forseti:get_key(<<"newkey">>)),
@@ -95,6 +107,7 @@ basic_test(_) ->
     end).
 
 args_test(_) ->
+    ?debugFmt("arg test ~n", []),
     ?_assert(begin
         ?assertEqual(undefined, forseti:search_key(<<"argskey">>)),
         Args = [arg1, arg2, arg3],
@@ -107,9 +120,11 @@ args_test(_) ->
     end).
 
 load_test(_) ->
+    ?debugFmt("load test ~n", []),
     [{timeout, 60, ?_assert(begin
         [ forseti:get_key(N) || N <- lists:seq(1,?PROCESSES) ],
         FullNodes = forseti:get_metrics(),
+        ?debugFmt("FullNodes: ~p~n", [FullNodes]),
         ?assertEqual((?PROCESSES div 3), proplists:get_value(?NODE1, FullNodes)),
         ?assertEqual((?PROCESSES div 3), proplists:get_value(?NODE2, FullNodes)),
         ?assertEqual((?PROCESSES div 3), proplists:get_value(?NODE3, FullNodes)),
@@ -134,6 +149,7 @@ load_test(_) ->
     end)}].
 
 lock_test(_) ->
+    ?debugFmt("lock_tests ~n", []),
     [{timeout, 60, ?_assert(begin
         ParentPID = self(),
         spawn(fun() ->
