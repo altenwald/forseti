@@ -224,7 +224,7 @@ handle_leader_cast({free,Node,PID}, #state{node_keys=NK, keys=Keys}=State, _Elec
         {ok, {del, Key, NewNK}, NewState}
     end;
 
-handle_leader_cast(Request, State, Election) ->
+handle_leader_cast(_Request, State, _Election) ->
     {noreply, State}.
  
 
