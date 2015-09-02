@@ -48,7 +48,7 @@ generator_test_() ->
             fun basic_test/1,
             fun args_test/1,
             fun load_test/1,
-            fun lock_test/1,
+            % fun lock_test/1,
             fun ret_error/1,
             fun throw_error/1
         ]
