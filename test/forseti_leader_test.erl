@@ -63,20 +63,23 @@ start() ->
     Nodes = [node()|nodes()],
     ?debugFmt("configuring nodes = ~p~n", [Nodes]),
     timer:sleep(1000),
-    forseti:start_link(Call, Nodes),
-    spawn(?NODE2, fun() -> 
+    PID1 = spawn(fun() ->
         forseti:start_link(Call, Nodes),
         receive ok -> ok end
     end),
-    spawn(?NODE3, fun() -> 
+    PID2 = spawn(?NODE2, fun() -> 
+        forseti:start_link(Call, Nodes),
+        receive ok -> ok end
+    end),
+    PID3 = spawn(?NODE3, fun() -> 
         forseti:start_link(Call, Nodes),
         receive ok -> ok end
     end),
     timer:sleep(500),
-    ok.
+    [PID1, PID2, PID3].
 
-stop(_) ->
-    %[ rpc:call(Node, forseti, stop, []) || Node <- [node()|nodes()] ],
+stop(PIDs) ->
+    [ PID ! ok || PID <- PIDs ],
     [ slave:stop(N) || N <- nodes() ],
     net_kernel:stop(),
     ok.
