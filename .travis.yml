@@ -1,5 +1,6 @@
 language: erlang
-script  : "./rebar get-deps compile && ./rebar skip_deps=true eunit"
+sudo: false
+script: "./rebar get-deps compile && ./rebar skip_deps=true eunit"
 otp_release:
    - 17.0
    - 17.1
