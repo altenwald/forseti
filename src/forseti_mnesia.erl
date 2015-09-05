@@ -21,14 +21,6 @@
     search_key/1
 ]).
 
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
--endif.
-
--ifndef(TEST).
--define(debugFmt(A,B), (ok)).
--endif.
-
 -type key() :: term().
 
 -record(forseti_processes, {
@@ -91,7 +83,29 @@ get_key(Key) ->
     {node(), pid()} | {error, Reason::atom()}.
 
 get_key(Key, Args) ->
-    {ok, {M,F,A}} = application:get_env(forseti, call),
+    gen_server:call(?MODULE, {get_key, Key, Args}).
+
+-spec search_key(Key::term()) -> {node(), pid()} | undefined.
+
+search_key(Key) ->
+    gen_server:call(?MODULE, {search_key, Key}).
+
+%% ------------------------------------------------------------------
+%% gen_server Function Definitions
+%% ------------------------------------------------------------------
+
+init([Call, Nodes]) ->
+    process_flag(trap_exit, true), 
+    init_db(Nodes),
+    {ok, Call}.
+
+handle_call({search_key, Key}, _From, Call) ->
+    {atomic, Reply} = mnesia:transaction(fun() ->
+        find_key(Key)
+    end),
+    {reply, Reply, Call};
+
+handle_call({get_key, Key, Args}, _From, {M,F,A}=Call) ->
     Params = [Key|A] ++ Args,
     {atomic, Result} = mnesia:transaction(fun() -> 
         case find_key(Key) of
@@ -100,45 +114,22 @@ get_key(Key, Args) ->
             true ->
                 {Node,PID};
             false ->
-                ?debugFmt("process DIE! ~p in ~p, regenerating...", [PID,Node]),
                 generate_process(Key,M,F,Params)
             end;
         undefined ->
-            mnesia:write_lock_table(forseti_processes), 
             generate_process(Key,M,F,Params)
         end
     end),
-    Result.
-
--spec search_key(Key::term()) -> {node(), pid()} | undefined.
-
-search_key(Key) ->
-    {atomic, Reply} = mnesia:transaction(fun() ->
-        find_key(Key)
-    end),
-    Reply.
-
-%% ------------------------------------------------------------------
-%% gen_server Function Definitions
-%% ------------------------------------------------------------------
-
-init([_Call, Nodes]) ->
-    process_flag(trap_exit, true), 
-    init_db(Nodes),
-    {ok, []}.
+    {reply, Result, Call};
 
 handle_call(stop, _From, State) ->
     {stop, normal, State}.
 
 handle_cast({link,PID}, State) ->
     link(PID),
-    ?debugFmt("link pid=~p (for node=~p) in node=~p",
-        [PID, node(PID), node()]),
     {noreply, State}.
 
 handle_info({'EXIT', PID, _Info}, State) ->
-    ?debugFmt("release pid=~p (from node=~p) by node=~p",
-        [PID, node(PID), node()]),
     release(node(PID), PID),
     {noreply, State};
 
@@ -166,7 +157,6 @@ init_db([]) ->
     mnesia:create_table(forseti_nodes, [
         {attributes, record_info(fields, forseti_nodes)}]),
     FN = #forseti_nodes{node=node()},
-    ?debugFmt("saving ~p", [FN]),
     mnesia:dirty_write(FN),
     ok;
 
@@ -184,7 +174,6 @@ init_db([Node|Nodes]) ->
             mnesia:add_table_copy(forseti_processes, node(), ram_copies),
             mnesia:add_table_copy(forseti_nodes, node(), ram_copies), 
             FN = #forseti_nodes{node=node()},
-            ?debugFmt("saving ~p", [FN]),
             mnesia:dirty_write(FN),
             ok;
         _ ->
@@ -202,9 +191,8 @@ release(Node, PID) ->
         }],
         [Key] = mnesia:select(forseti_processes, Match),
         mnesia:delete({forseti_processes, Key}),
-        [#forseti_nodes{proc_len=PL}=FN] = mnesia:read(forseti_nodes, Node),
-        ?debugFmt("release from mnesia(transaction): ~p", [FN]),
-        mnesia:write(FN#forseti_nodes{proc_len=PL-1})
+        mnesia:dirty_update_counter(forseti_nodes, Node, -1),
+        ok
     end),
     ok.
 
@@ -233,12 +221,7 @@ generate_process(Key, M, F, A) ->
 
 store_process(Key, Node, PID) ->
     mnesia:write(#forseti_processes{key=Key, node=Node, process=PID}),
-    case mnesia:read(forseti_nodes, Node) of
-    [#forseti_nodes{proc_len=PL}=FN] ->
-        mnesia:write(FN#forseti_nodes{proc_len=PL+1});
-    [] ->
-        mnesia:write(#forseti_nodes{node=Node, proc_len=1})
-    end,
+    mnesia:dirty_update_counter(forseti_nodes, Node, 1),
     ok.
 
 -spec find_key(key()) -> {node(), pid()} | undefined.
