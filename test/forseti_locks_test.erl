@@ -5,13 +5,13 @@
 
 -define(PROCESSES, 999).
 
--define(NODE1, forseti1_leader@localhost).
--define(NODE2, forseti2_leader@localhost).
--define(NODE3, forseti3_leader@localhost).
+-define(NODE1, forseti1_locks@localhost).
+-define(NODE2, forseti2_locks@localhost).
+-define(NODE3, forseti3_locks@localhost).
 
--define(NODE1_SHORT, forseti1_leader).
--define(NODE2_SHORT, forseti2_leader).
--define(NODE3_SHORT, forseti3_leader).
+-define(NODE1_SHORT, forseti1_locks).
+-define(NODE2_SHORT, forseti2_locks).
+-define(NODE3_SHORT, forseti3_locks).
 
 -define(NODES_T, [?NODE1, ?NODE2, ?NODE3]).
 
@@ -62,32 +62,34 @@ generator_test_() ->
 start() ->
     ?debugFmt("START ~n", []),
     net_kernel:start([?NODE1, shortnames]),
-%    slave:start(localhost, ?NODE2_SHORT),
- %   slave:start(localhost, ?NODE3_SHORT),
+    slave:start(localhost, ?NODE2_SHORT),
+    slave:start(localhost, ?NODE3_SHORT),
 
     Call = {?MODULE, start_link, []},
-    %Nodes = [node()|nodes()],
-    Nodes = ?NODES_T,
+    Nodes = [node()|nodes()],
     ?debugFmt("configuring nodes = ~p~n", [Nodes]),
     timer:sleep(1000),
-    forseti:start_link(locks, Call, Nodes),
+    PID1 = spawn(fun() ->
+        forseti:start_link(locks, Call, Nodes),
+        receive ok -> ok end
+    end),
     slave:start(localhost, ?NODE2_SHORT),
     timer:sleep(1000),
-    spawn(?NODE2, fun() -> 
+    PID2 = spawn(?NODE2, fun() -> 
         forseti:start_link(locks, Call, Nodes),
         receive ok -> ok end
     end),
     slave:start(localhost, ?NODE3_SHORT),
     timer:sleep(1000),
-    spawn(?NODE3, fun() -> 
+    PID3 = spawn(?NODE3, fun() -> 
         forseti:start_link(locks, Call, Nodes),
         receive ok -> ok end
     end),
     timer:sleep(500),
-    ok.
+    [PID1, PID2, PID3].
 
-stop(_) ->
-    %[ rpc:call(Node, forseti, stop, []) || Node <- [node()|nodes()] ],
+stop(PIDs) ->
+    [ PID ! ok || PID <- PIDs ],
     [ slave:stop(N) || N <- nodes() ],
     net_kernel:stop(),
     ok.
@@ -98,7 +100,7 @@ basic_test(_) ->
     ?debugFmt("basic_tests ~n", []),
     ?_assert(begin
         ?assertEqual(undefined, forseti:search_key(<<"notfound">>)),
-        ?assertMatch({_Node,_PID}, forseti:get_key(<<"newkey">>)),
+        ?assertMatch({ok,_PID}, forseti:get_key(<<"newkey">>)),
         {_Node,PID} = forseti:search_key(<<"newkey">>),
         PID ! ok,
         timer:sleep(500),

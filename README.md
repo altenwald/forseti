@@ -102,6 +102,8 @@ Or in the configuration file:
 
 As is implemented in `ejabberd`, you can use `mnesia` as the store for the processes. This backend lets you add and remove nodes from the cluster without restart the whole cluster. The worst part is the latency. If you plan to use forseti for high load requesting location for processes, creating and removing processes, perhaps you should use another backend.
 
+**IMPORTANT**: the `lock_test` was not working for mnesia backend because takes a lot of time to release all the processes at the same time and mnesia is not blocked in the meantime. It's dangerous to use this backend if you use it for very short live processes.
+
 To use this backend:
 
 ```erlang

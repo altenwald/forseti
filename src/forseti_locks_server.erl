@@ -6,6 +6,8 @@
 
 -define(SERVER, ?MODULE).
 
+-include("forseti.hrl").
+
 %% ------------------------------------------------------------------
 %% API Function Exports
 %% ------------------------------------------------------------------
@@ -25,7 +27,7 @@
 ]).
 
 -record(state, {
-    keys = dict:new() :: dict()
+    keys = dict:new() :: ?DICT_TYPE
 }).
 
 -ifdef(TEST).

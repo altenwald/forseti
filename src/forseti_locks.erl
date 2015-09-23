@@ -6,6 +6,7 @@
 
 -define(SERVER, ?MODULE).
 
+-include("forseti.hrl").
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -41,8 +42,8 @@
 
 -record(state, {
     nodes :: [atom()],
-    keys = dict:new() :: dict(),
-    node_keys = dict:new() :: dict(),
+    keys = dict:new() :: ?DICT_TYPE,
+    node_keys = dict:new() :: ?DICT_TYPE,
     module :: atom(),
     function :: atom(),
     args :: [any()],
@@ -75,17 +76,17 @@ start_link({_M,_F,_A}=Launch, Nodes) ->
 -spec stop() -> ok.
 
 stop() ->
-    gen_leader:call(?MODULE, stop).
+    locks_leader:call(?MODULE, stop).
 
 -spec choose_node() -> node().
 
 choose_node() ->
-    gen_leader:call(?MODULE, choose_node).
+    locks_leader:call(?MODULE, choose_node).
 
 -spec get_metrics() -> [{node(), pos_integer()}].
 
 get_metrics() ->
-    gen_leader:call(?MODULE, get_metrics).
+    locks_leader:call(?MODULE, get_metrics).
 
 -spec get_key(Key::term()) -> {node(), pid()} | {error, Reason::atom()}.
 

@@ -57,7 +57,6 @@ generator_test_() ->
 %% -- initilizer and finisher
 
 start() ->
-    ?debugFmt("----- START", []),
     net_kernel:start([?NODE_TEST, shortnames]),
     slave:start(localhost, ?NODE1_SHORT),
     slave:start(localhost, ?NODE2_SHORT),
@@ -65,12 +64,12 @@ start() ->
 
     Call = {forseti_mnesia_test, start_link, []},
     Nodes = nodes(),
-    ?debugFmt("configuring nodes = ~p~n", [Nodes]),
     timer:sleep(1000),
     ParentPID = self(),
     spawn(?NODE1, fun() ->
         mnesia:stop(),
         mnesia:delete_schema([node()]),
+        timer:sleep(500),
         forseti:start_link(mnesia, Call, Nodes),
         ParentPID ! ok,
         receive ok -> ok end
@@ -79,6 +78,7 @@ start() ->
     spawn(?NODE2, fun() -> 
         mnesia:stop(),
         mnesia:delete_schema([node()]),
+        timer:sleep(500),
         forseti:start_link(mnesia, Call, Nodes),
         ParentPID ! ok,
         receive ok -> ok end
@@ -87,6 +87,7 @@ start() ->
     spawn(?NODE3, fun() -> 
         mnesia:stop(),
         mnesia:delete_schema([node()]),
+        timer:sleep(500),
         forseti:start_link(mnesia, Call, Nodes),
         ParentPID ! ok,
         receive ok -> ok end
@@ -95,7 +96,6 @@ start() ->
     ok.
 
 stop(_) ->
-    ?debugFmt("===== STOP", []),
     [ slave:stop(N) || N <- nodes() ],
     net_kernel:stop(),
     timer:sleep(1000),
@@ -176,7 +176,8 @@ lock_test(_) ->
             rpc:call(?NODE2, forseti, get_key, [Key]),
             ?debugFmt("<< requested existent key = ~p~n", [Key])
         end, Seq ++ Seq ++ Seq ++ Seq ++ Seq),
-        ?assertEqual(undefined, rpc:call(?NODE3, forseti, search_key, [<<"delay",4/integer>>])),
+        ?assertEqual(undefined, rpc:call(?NODE3, forseti, search_key,
+            [<<"delay",4/integer>>])),
         {T2,S2,_} = os:timestamp(),
         receive 
             ok -> ok 

@@ -5,6 +5,8 @@
 
 -define(SERVER, ?MODULE).
 
+-include("forseti.hrl").
+
 %% ------------------------------------------------------------------
 %% API Function Exports
 %% ------------------------------------------------------------------
@@ -39,8 +41,8 @@
 
 -record(state, {
     nodes :: [atom()],
-    keys = dict:new() :: dict(),
-    node_keys = dict:new() :: dict(),
+    keys = dict:new() :: ?DICT_TYPE,
+    node_keys = dict:new() :: ?DICT_TYPE,
     module :: atom(),
     function :: atom(),
     args :: [any()]
