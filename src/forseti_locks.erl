@@ -46,8 +46,7 @@
     node_keys = dict:new() :: ?DICT_TYPE,
     module :: atom(),
     function :: atom(),
-    args :: [any()],
-    am_leader :: boolean()
+    args :: [any()]
 }).
 
 
@@ -109,21 +108,12 @@ search_key(Key) ->
 %% locks_leader Function Definitions
 %% ------------------------------------------------------------------
 
-elected(#state{node_keys=NK}=State, Election, undefined) ->
-    case locks_leader:new_candidates(Election) of
-    [] ->
-        NewNK = case dict:find(node(), NK) of
-            error ->  dict:store(node(), 0, NK);
-            _ -> NK
-        end,
-        {ok, {sync, NewNK}, State#state{node_keys= NewNK, am_leader = true}};
-    _Cands ->
-        NewNK = case dict:find(node(), NK) of
-            error -> dict:store(node(), 0, NK);
-            _ -> NK
-        end,
-        {ok, {sync, NewNK}, State#state{node_keys=NewNK, am_leader = true}}
-    end;
+elected(#state{node_keys=NK}=State, _Election, undefined) ->
+    NewNK = case dict:find(node(), NK) of
+        error ->  dict:store(node(), 0, NK);
+        _ -> clean_dict(NK)
+    end,
+    {ok, {sync, NewNK}, State#state{node_keys= NewNK}};
 
 elected(State, Election, Pid) when is_pid(Pid) ->
     elected(State, Election, node(Pid));
@@ -133,14 +123,13 @@ elected(#state{node_keys=NK}=State, Election, Node) ->
         error -> dict:store(Node, 0, NK);
         _ -> NK
     end,
-    NewState = State#state{node_keys = NKeys, am_leader=true},
+    NewState = State#state{node_keys = NKeys},
     locks_leader:broadcast({from_leader, NewState, [Node]}, Election),
     {ok, {sync, NKeys}, NewState}.
 
 
 surrendered(State, {sync, NK}, _Election) ->
-    NewState = State#state{node_keys = NK, am_leader = false},
-    {ok, NewState}.
+    {ok, State#state{node_keys = NK}}.
 
 handle_leader_call(_Request, _From, State, _Election) ->
     {reply, ok, State}.
@@ -246,8 +235,7 @@ from_leader({add, Key, {Node, PID}=Value, NodeKeys},
 
 from_leader({sync, NK}, #state{} = State, _Election) ->
     gen_server:cast(forseti_locks_server, {keys, State#state.keys}),
-    NewState = State#state{node_keys=NK},
-    {ok, NewState};
+    {ok, State#state{node_keys=NK}};
 
 from_leader(#state{}=State, _OldState, _Election) ->
     gen_server:cast(forseti_locks_server, {keys, State#state.keys}),
@@ -265,7 +253,7 @@ handle_DOWN(Node, #state{keys=Keys,node_keys=NK}=State, _Election) ->
     NewKeys = dict:filter(fun
         (_Key, {N,_P}) when N =/= Node -> true;
         (_Key, _Value) -> false
-    end, Keys), 
+    end, Keys),
     {ok, State#state{keys=NewKeys,node_keys=NewNK}}.
 
 %% ------------------------------------------------------------------
@@ -353,6 +341,27 @@ increment(Node, NK) ->
 
 connect_nodes([]) -> ok;
 connect_nodes([Node|Nodes]) ->
-    %net_kernel:connect_node(Node),
-    net_adm:ping(Node),
+    net_kernel:connect_node(Node),
     connect_nodes(Nodes).
+
+
+clean_dict(NK) ->
+    LNodes = get_active_nodes([node()|nodes()]),
+    KList= dict:to_list(NK),
+    F = fun(Node, Acc) ->
+        case lists:keysearch(Node, 1, KList) of
+        {value, Nk} -> Acc ++ [Nk];
+        _ -> Acc
+        end end,
+    DelNodes = [ DN || {DN, _}  <- (KList -- lists:foldl(F,[],LNodes))],
+    lists:foldl(fun(Node, K) ->
+        dict:erase(Node, K)
+    end,NK,DelNodes).
+
+
+get_active_nodes(Nodes) ->
+    lists:foldl(fun(Node, Acc) ->
+        case net_kernel:connect_node(Node) of
+        true -> Acc ++ [Node];
+        _ -> Acc
+    end end, [], Nodes).
