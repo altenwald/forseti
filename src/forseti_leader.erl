@@ -36,6 +36,7 @@
     get_metrics/0,
     get_key/1,
     get_key/2,
+    get_key/3,
     search_key/1
 ]).
 
@@ -45,7 +46,8 @@
     node_keys = dict:new() :: ?DICT_TYPE,
     module :: atom(),
     function :: atom(),
-    args :: [any()]
+    args :: [any()],
+    modules :: [any()]
 }).
 
 -ifdef(TEST).
@@ -65,7 +67,11 @@
     Nodes::[atom()]) -> {ok, pid()} | {error, term()}.
 
 start_link({_M,_F,_A}=Launch, Nodes) ->
+    gen_leader:start_link(?SERVER, Nodes, [], ?MODULE, [Launch,Nodes], []);
+
+start_link(Launch, Nodes) when is_list(Launch)->
     gen_leader:start_link(?SERVER, Nodes, [], ?MODULE, [Launch,Nodes], []).
+
 
 -spec stop() -> ok.
 
@@ -93,6 +99,13 @@ get_key(Key) ->
 
 get_key(Key, Args) ->
     gen_server:call(forseti_leader_server, {get_key, Key, Args}).
+
+-spec get_key(
+    Mod::term(), Key::term(), Args::[term()]) ->
+    {node(), pid()} | {error, Reason::atom()}.
+
+get_key(Mod, Key, Args) ->
+    gen_server:call(forseti_leader_server, {get_key, Mod, Key, Args}).
 
 -spec search_key(Key::term()) -> {node(), pid()} | undefined.
 
@@ -186,6 +199,59 @@ handle_leader_cast({get_key,Key,NewArgs,From}, #state{
         end
     end;
 
+handle_leader_cast({get_key, Mod, Key, NewArgs,From}, #state{
+        keys=Keys, node_keys=NK, nodes=Nodes,
+        modules=Modules}=State, _Election) ->
+    [{Module,Function,Args}]=[{M,F,A} || {M,F,A} <- Modules, Mod =:= M],
+    {Node,PID} = case dict:find(Key, Keys) of
+        error -> {undefined, undefined};
+        {ok,{N,P}} -> {N,P}
+    end,
+    case forseti_lib:is_alive(Node, PID) of
+    true ->
+        gen_server:reply(From, {ok, PID}),
+        {noreply, State};
+    _ ->
+        try
+            Params = [Key|Args] ++ NewArgs,
+            io:format("Params: ~p~n", [Params]),
+            {NewNode, NewPID} = case rpc:call(
+                    choose_node(NK,Nodes), Module, Function, Params) of
+                {ok, RetNode, NewP} -> 
+                    {RetNode, NewP};
+                {ok, NewP} -> 
+                    {node(NewP), NewP};
+                {error, {already_started,OldP}} -> 
+                    {node(OldP), OldP};
+                {error, _Reason} ->
+                    throw(enoproc)
+            end,
+            NewKeys = dict:store(Key, {NewNode,NewPID}, Keys),
+            NewNK = increment(NewNode, NK),
+            NewState = State#state{node_keys=NewNK,keys=NewKeys},
+            gen_server:reply(From, {ok, NewPID}),
+            gen_server:cast(forseti_leader_server, {add, Key, {NewNode,NewPID}}),
+            case NewNode =:= node() of
+                true -> link(NewPID);
+                false -> ok
+            end,
+            {ok, {add, Key, {NewNode, NewPID}, NewNK}, NewState}
+        catch 
+            % the remote node is falling down, repeat the action
+            _:{badmatch,{badrpc,_}} ->
+                gen_leader:leader_cast(?MODULE, {get_key,Key,From}),
+                {noreply, State};
+            _:{case_clause, _} ->
+                gen_server:reply(From, {error, eprocfails}),
+                {noreply, State};
+            _:enoproc ->
+                gen_server:reply(From, {error, enoproc}),
+                {noreply, State}
+        end
+    end;
+
+
+
 handle_leader_cast({free,Node,PID}, #state{node_keys=NK, keys=Keys}=State, _Election) ->
     Key = dict:fold(fun
         (K,{N,P},undefined) when N =:= Node andalso P =:= PID -> K;
@@ -252,7 +318,16 @@ init([{Module,Function,Args}, Nodes]) ->
         nodes=Nodes,
         module=Module,
         function=Function,
-        args=Args}}.
+        args=Args}};
+
+init([ListsModules, Nodes]) ->
+    process_flag(trap_exit, true),
+    {ok, #state{
+        nodes=Nodes,
+        module=[],
+        function=[],
+        args=[],
+        modules=ListsModules}}.
 
 handle_call(get_metrics, _From, #state{node_keys=NK}=State, _Election) ->
     {reply, dict:to_list(NK), State};

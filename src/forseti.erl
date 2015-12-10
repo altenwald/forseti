@@ -11,7 +11,8 @@
     search_key/1,
     get_metrics/0,
     get_key/1,
-    get_key/2
+    get_key/2,
+    get_key/3
 ]).
 
 -include("forseti.hrl").
@@ -65,3 +66,7 @@ get_key(Key) ->
 get_key(Key, Args) ->
     Module = forseti_app:get_mod_backend(),
     Module:get_key(Key, Args).
+
+get_key(Mod, Key, Args) ->
+    Module = forseti_app:get_mod_backend(),
+    Module:get_key(Mod, Key, Args).

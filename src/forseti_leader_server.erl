@@ -76,6 +76,21 @@ handle_call({get_key, Key, Args}, From, #state{keys=Keys}=State) ->
         end
     end;
 
+handle_call({get_key, Mod, Key, Args}, From, #state{keys=Keys}=State) ->
+    case dict:find(Key, Keys) of
+    error ->
+        gen_leader:leader_cast(forseti_leader, {get_key, Mod, Key, Args, From}),
+        {noreply, State};
+    {ok, {Node,PID}} ->
+        case check(node(), Node, PID) of
+        true ->
+            {reply, {ok,PID}, State};
+        _ ->
+            gen_leader:leader_cast(forseti_leader, {get_key,Mod, Key, Args, From}),
+            {noreply, State}
+        end
+    end;
+
 handle_call({search, Key}, From, #state{keys=Keys}=State) ->
     case dict:find(Key, Keys) of
     error ->
