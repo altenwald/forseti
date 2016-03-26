@@ -32,7 +32,7 @@ start(_StartType, _StartArgs) ->
     MaxTime = proplists:get_value(max_time, Conf, ?MAX_RETRIES),
     Call = proplists:get_value(call, Conf),
     Nodes = proplists:get_value(nodes, Conf, [node()]),
-    Backend = proplists:get_value(backend, Conf, gen_leader),
+    Backend = proplists:get_value(backend, Conf, locks),
     case Call of
     undefined ->
         {ok, self()};
@@ -55,7 +55,7 @@ get_mod_backend(locks) -> forseti_locks;
 get_mod_backend({ok, gen_leader}) -> forseti_leader;
 get_mod_backend({ok, mnesia}) -> forseti_mnesia;
 get_mod_backend({ok, locks}) -> forseti_locks;
-get_mod_backend(undefined) -> forseti_leader.
+get_mod_backend(undefined) -> throw(ebackendnotdefined).
 
 %%%===================================================================
 %%% Internal functions

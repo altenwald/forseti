@@ -56,46 +56,36 @@ generator_test_() ->
 
 %% -- initilizer and finisher
 
+init_forseti(ParentPID, Paths, Call, Nodes) ->
+    lists:foreach(fun(Path) ->
+        code:add_patha(Path)
+    end, Paths),
+    {ok, _} = rpc:call(?NODE_TEST, cover, start, [[node()]]),
+    mnesia:stop(),
+    mnesia:delete_schema([node()]),
+    timer:sleep(500),
+    forseti:start_link(mnesia, Call, Nodes),
+    ParentPID ! ok,
+    receive ok -> ok end.
+
 start() ->
     net_kernel:start([?NODE_TEST, shortnames]),
     slave:start(localhost, ?NODE1_SHORT),
     slave:start(localhost, ?NODE2_SHORT),
     slave:start(localhost, ?NODE3_SHORT),
 
-    Call = {forseti_mnesia_test, start_link, []},
-    Nodes = nodes(),
     timer:sleep(1000),
-    ParentPID = self(),
-    spawn(?NODE1, fun() ->
-        mnesia:stop(),
-        mnesia:delete_schema([node()]),
-        timer:sleep(500),
-        forseti:start_link(mnesia, Call, Nodes),
-        ParentPID ! ok,
-        receive ok -> ok end
-    end),
-    timer:sleep(500),
-    spawn(?NODE2, fun() -> 
-        mnesia:stop(),
-        mnesia:delete_schema([node()]),
-        timer:sleep(500),
-        forseti:start_link(mnesia, Call, Nodes),
-        ParentPID ! ok,
-        receive ok -> ok end
-    end),
-    timer:sleep(500),
-    spawn(?NODE3, fun() -> 
-        mnesia:stop(),
-        mnesia:delete_schema([node()]),
-        timer:sleep(500),
-        forseti:start_link(mnesia, Call, Nodes),
-        ParentPID ! ok,
-        receive ok -> ok end
-    end),
+    Call = {?MODULE, start_link, []},
+    Args = [self(), code:get_path(), Call, nodes()],
+    lists:foreach(fun(Node) ->
+        rpc:cast(Node, ?MODULE, init_forseti, Args),
+        timer:sleep(500)
+    end, nodes()),
     [ receive ok -> ok end || _ <- lists:seq(1,3) ],
     ok.
 
 stop(_) ->
+    cover:flush(nodes()),
     [ slave:stop(N) || N <- nodes() ],
     net_kernel:stop(),
     timer:sleep(1000),
@@ -119,7 +109,7 @@ args_test(_) ->
         ?assertEqual(undefined, rpc:call(?NODE2, forseti, search_key, [<<"argskey">>])),
         Args = [arg1, arg2, arg3],
         ?assertMatch({_Node,_PID}, rpc:call(?NODE2, forseti, get_key, [<<"argskey">>, Args])),
-        {_Node,PID} = rpc:call(?NODE2, forseti, search_key, [<<"argskey">>]), 
+        {_Node,PID} = rpc:call(?NODE2, forseti, search_key, [<<"argskey">>]),
         PID ! ok,
         timer:sleep(500),
         ?assertEqual(undefined, rpc:call(?NODE1, forseti, search_key, [<<"argskey">>])),
@@ -169,7 +159,7 @@ lock_test(_) ->
         end),
         timer:sleep(4000),
         {T1,S1,_} = os:timestamp(),
-        Seq = lists:seq(1, 2), 
+        Seq = lists:seq(1, 2),
         lists:foreach(fun(N) ->
             Key = <<"delay",N/integer>>,
             ?debugFmt(">> request existent key = ~p~n", [Key]),
@@ -179,8 +169,8 @@ lock_test(_) ->
         ?assertEqual(undefined, rpc:call(?NODE3, forseti, search_key,
             [<<"delay",4/integer>>])),
         {T2,S2,_} = os:timestamp(),
-        receive 
-            ok -> ok 
+        receive
+            ok -> ok
         end,
         ((T1 * 1000000) + S1 + 10) > ((T2 * 1000000) + S2)
     end)},
