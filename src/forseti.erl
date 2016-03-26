@@ -30,7 +30,7 @@ start_link(Backend, MaxR, MaxT, Call, Nodes) ->
     application:set_env(forseti, max_time, MaxT),
     application:set_env(forseti, call, Call),
     application:set_env(forseti, nodes, Nodes),
-    application:set_env(forseti, backend, Backend),  
+    application:set_env(forseti, backend, Backend),
     forseti_app:start(normal, []).
 
 -spec get_less_used_node() -> node().
