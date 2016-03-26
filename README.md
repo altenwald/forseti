@@ -1,7 +1,9 @@
 forseti
 =======
 
-[![Build Status](https://api.travis-ci.org/altenwald/forseti.png)](https://travis-ci.org/altenwald/forseti)
+[![Build Status](https://img.shields.io/travis/altenwald/forseti/master.svg)](https://travis-ci.org/altenwald/forseti)
+[![Coverage Status](https://img.shields.io/coveralls/altenwald/forseti/master.svg)](https://coveralls.io/r/altenwald/forseti)
+[![License: LGPL 2.1](https://img.shields.io/github/license/altenwald/forseti.svg)](https://raw.githubusercontent.com/altenwald/forseti/master/COPYING)
 
 [Forseti](http://en.wikipedia.org/wiki/Forseti) is a balancer and distribution system for Erlang processes. The basic idea for this system is keep a basic leader/worker structure for keep a process dictionary. When is needed a new process, the request should be done to the leader, the leader spawns a new process in a worker (less used worker) and do that the worker monitor the new process. If the process die or finish its running, the worker removes the process from the dictionary (sends a request for that to the leader).
 
