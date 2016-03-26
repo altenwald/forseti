@@ -59,7 +59,9 @@ generator_test_() ->
 %% -- initilizer and finisher
 
 init_forseti(ParentPID, Paths, Call, Nodes) ->
-    code:set_path(Paths),
+    lists:foreach(fun(Path) ->
+        code:add_patha(Path)
+    end, Paths),
     {ok, PID} = forseti:start_link(gen_leader, Call, Nodes),
     ParentPID ! {ok, self(), PID},
     receive ok -> ok end.

@@ -57,7 +57,9 @@ generator_test_() ->
 %% -- initilizer and finisher
 
 init_forseti(ParentPID, Paths, Call, Nodes) ->
-    code:set_path(Paths),
+    lists:foreach(fun(Path) ->
+        code:add_patha(Path)
+    end, Paths),
     mnesia:stop(),
     mnesia:delete_schema([node()]),
     timer:sleep(500),

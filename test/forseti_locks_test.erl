@@ -61,9 +61,11 @@ generator_test_() ->
 %% -- initilizer and finisher
 
 init_forseti(ParentPID, Paths, Call, Nodes) ->
-    code:set_path(Paths),
+    lists:foreach(fun(Path) ->
+        code:add_patha(Path)
+    end, Paths),
     {ok, PID} = forseti:start_link(locks, Call, Nodes),
-    ParentPID ! {ok, self(), PID},
+    ParentPID ! {ok, PID},
     receive ok -> ok end.
 
 start() ->
@@ -75,10 +77,11 @@ start() ->
         ShortName = list_to_atom(hd(string:tokens(atom_to_list(Node),"@"))),
         slave:start(localhost, ShortName),
         timer:sleep(500),
-        spawn(fun() ->
+        PID = spawn(fun() ->
             rpc:call(Node, ?MODULE, init_forseti, Args)
         end),
-        receive {ok, InitPID, _PID} -> InitPID end
+        receive {ok, _InitPID} -> ok end,
+        PID
     end, ?NODES_T),
     timer:sleep(1000),
     PIDs.
