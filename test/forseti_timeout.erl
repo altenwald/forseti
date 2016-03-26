@@ -14,7 +14,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
--export([start_link/0,
+-export([start_link/1,
 timeout/1,
 finish/1]).
 
@@ -42,9 +42,9 @@ finish/1]).
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link() ->
+-spec(start_link(any()) ->
     {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link() ->
+start_link(_Key) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 timeout(Id) ->
