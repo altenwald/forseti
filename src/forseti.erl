@@ -17,13 +17,13 @@
 -include("forseti.hrl").
 
 start_link(Call, Nodes) ->
-    start_link(gen_leader, ?MAX_RETRIES, ?MAX_TIME, Call, Nodes).
+    start_link(locks, ?MAX_RETRIES, ?MAX_TIME, Call, Nodes).
 
 start_link(Backend, Call, Nodes) ->
     start_link(Backend, ?MAX_RETRIES, ?MAX_TIME, Call, Nodes).
 
 start_link(MaxR, MaxT, Call, Nodes) ->
-    start_link(gen_leader, MaxR, MaxT, Call, Nodes).
+    start_link(locks, MaxR, MaxT, Call, Nodes).
 
 start_link(Backend, MaxR, MaxT, Call, Nodes) ->
     application:set_env(forseti, max_retries, MaxR),
