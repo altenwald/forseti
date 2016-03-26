@@ -60,6 +60,7 @@ init_forseti(ParentPID, Paths, Call, Nodes) ->
     lists:foreach(fun(Path) ->
         code:add_patha(Path)
     end, Paths),
+    {ok, _} = rpc:call(?NODE_TEST, cover, start, [[node()]]),
     mnesia:stop(),
     mnesia:delete_schema([node()]),
     timer:sleep(500),
@@ -84,6 +85,7 @@ start() ->
     ok.
 
 stop(_) ->
+    cover:flush(nodes()),
     [ slave:stop(N) || N <- nodes() ],
     net_kernel:stop(),
     timer:sleep(1000),

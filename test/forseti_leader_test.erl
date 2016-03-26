@@ -62,6 +62,7 @@ init_forseti(ParentPID, Paths, Call, Nodes) ->
     lists:foreach(fun(Path) ->
         code:add_patha(Path)
     end, Paths),
+    {ok, _} = rpc:call(?NODE_TEST, cover, start, [[node()]]),
     {ok, PID} = forseti:start_link(gen_leader, Call, Nodes),
     ParentPID ! {ok, self(), PID},
     receive ok -> ok end.
@@ -84,6 +85,7 @@ start() ->
     PIDs.
 
 stop(PIDs) ->
+    cover:flush(nodes()),
     [ PID ! ok || PID <- PIDs ],
     [ slave:stop(N) || N <- nodes() ],
     net_kernel:stop(),
