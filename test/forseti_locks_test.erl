@@ -38,7 +38,6 @@ start_link(_Key) ->
     end)}.
 
 start_link(_Key, arg1, arg2, arg3) ->
-    ?debugFmt("start_link args ~n ", []),
     {ok, spawn_link(fun() ->
         receive _ -> ok end
     end)}.
