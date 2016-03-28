@@ -15,30 +15,6 @@
 -define(NODE2_SHORT, forseti2_mnesia).
 -define(NODE3_SHORT, forseti3_mnesia).
 
-%% -- code for the pool
-
-start_link(<<"delay",_/integer>>) ->
-    timer:sleep(2000),
-    {ok, spawn_link(fun() ->
-        receive _ -> ok end
-    end)};
-
-start_link(throw_error) ->
-    throw(enoproc);
-
-start_link(ret_error) ->
-    {error, notfound};
-
-start_link(_Key) ->
-    {ok, spawn_link(fun() ->
-        receive _ -> ok end
-    end)}.
-
-start_link(_Key, arg1, arg2, arg3) ->
-    {ok, spawn_link(fun() ->
-        receive _ -> ok end
-    end)}.
-
 %% -- generator
 
 generator_test_() ->
@@ -75,7 +51,7 @@ start() ->
     slave:start(localhost, ?NODE3_SHORT),
 
     timer:sleep(1000),
-    Call = {?MODULE, start_link, []},
+    Call = {forseti_common, start_link, []},
     Args = [self(), code:get_path(), Call, nodes()],
     lists:foreach(fun(Node) ->
         rpc:cast(Node, ?MODULE, init_forseti, Args),
@@ -94,56 +70,19 @@ stop(_) ->
 %% -- tests
 
 basic_test(_) ->
-    ?_assert(begin
-        ?assertEqual(undefined, rpc:call(?NODE1, forseti, search_key, [<<"notfound">>])),
-        ?assertMatch({_Node,_PID}, rpc:call(?NODE1, forseti, get_key, [<<"newkey">>])),
-        {_Node,PID} = rpc:call(?NODE1, forseti, search_key, [<<"newkey">>]),
-        PID ! ok,
-        timer:sleep(500),
-        ?assertEqual(undefined, rpc:call(?NODE1, forseti, search_key, [<<"newkey">>])),
-        true
-    end).
+    forseti_common:basic_test(?NODE1).
 
 args_test(_) ->
-    ?_assert(begin
-        ?assertEqual(undefined, rpc:call(?NODE2, forseti, search_key, [<<"argskey">>])),
-        Args = [arg1, arg2, arg3],
-        ?assertMatch({_Node,_PID}, rpc:call(?NODE2, forseti, get_key, [<<"argskey">>, Args])),
-        {_Node,PID} = rpc:call(?NODE2, forseti, search_key, [<<"argskey">>]),
-        PID ! ok,
-        timer:sleep(500),
-        ?assertEqual(undefined, rpc:call(?NODE1, forseti, search_key, [<<"argskey">>])),
-        true
-    end).
+    forseti_common:args_test(?NODE2).
 
 load_test(_) ->
-    [{timeout, 60, ?_assert(begin
-        [ rpc:call(?NODE1, forseti, get_key, [N]) || N <- lists:seq(1,?PROCESSES) ],
-        timer:sleep(1000),
-        FullNodes = rpc:call(?NODE2, forseti, get_metrics, []),
-        ?debugFmt("full nodes = ~p~n", [FullNodes]),
-        ?assertEqual((?PROCESSES div 3), proplists:get_value(?NODE1, FullNodes)),
-        ?assertEqual((?PROCESSES div 3), proplists:get_value(?NODE2, FullNodes)),
-        ?assertEqual((?PROCESSES div 3), proplists:get_value(?NODE3, FullNodes)),
+    forseti_common:load_test(?PROCESSES, ?NODE1, ?NODE2, ?NODE3).
 
-        ?assertNotEqual(undefined, rpc:call(?NODE1, forseti, search_key, [(?PROCESSES + 1) div 5])),
-        ?assertNotEqual(undefined, rpc:call(?NODE1, forseti, search_key, [(?PROCESSES + 1) div 2])),
-        ?assertNotEqual(undefined, rpc:call(?NODE1, forseti, search_key, [((?PROCESSES + 1) div 10) * 9])),
-        true
-    end)},
-    {timeout, 60, ?_assert(begin
-        lists:foreach(fun(Key) ->
-            {_Node,PID} = rpc:call(?NODE1, forseti, get_key, [Key]),
-            PID ! ok
-        end, lists:seq(1, ?PROCESSES)),
-        timer:sleep(1000),
-        EmptyNodes = rpc:call(?NODE3, forseti, get_metrics, []),
-        ?debugFmt("metrics: ~p~n", [EmptyNodes]),
-        ?assertEqual(0, proplists:get_value(?NODE1, EmptyNodes)),
-        ?assertEqual(0, proplists:get_value(?NODE2, EmptyNodes)),
-        ?assertEqual(0, proplists:get_value(?NODE3, EmptyNodes)),
-        true
-    end)}].
+ret_error(_) ->
+    forseti_common:ret_error(?NODE1).
+
+throw_error(_) ->
+    forseti_common:throw_error(?NODE1).
 
 lock_test(_) ->
     [{timeout, 60, ?_assert(begin
@@ -188,15 +127,3 @@ lock_test(_) ->
         0 =:= proplists:get_value(?NODE2, EmptyNodes) andalso
         0 =:= proplists:get_value(?NODE3, EmptyNodes)
     end)}].
-
-ret_error(_) ->
-    ?_assert(begin
-        ?assertMatch({error,_}, rpc:call(?NODE1, forseti, get_key, [ret_error])),
-        true
-    end).
-
-throw_error(_) ->
-    ?_assert(begin
-        ?assertMatch({error,_}, rpc:call(?NODE1, forseti, get_key, [throw_error])),
-        true
-    end).

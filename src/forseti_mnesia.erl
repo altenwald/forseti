@@ -107,7 +107,15 @@ init([Nodes]) ->
 
 handle_call({find, Name, Key}, _From, Call) ->
     {atomic, Reply} = mnesia:transaction(fun() ->
-        find_key(Name, Key)
+        case find_key(Name, Key) of
+            {Node, PID} ->
+                case forseti_lib:is_alive(Node, PID) of
+                    true -> {ok, PID};
+                    false -> undefined
+                end;
+            _ ->
+                undefined
+        end
     end),
     {reply, Reply, Call};
 
@@ -119,7 +127,7 @@ handle_call({get, Name, Key, Args}, _From, Calls) ->
         {Node,PID} ->
             case forseti_lib:is_alive(Node, PID) of
             true ->
-                {Node,PID};
+                {ok,PID};
             false ->
                 generate_process(Name,Key,M,F,Params)
             end;
@@ -215,14 +223,14 @@ generate_process(Name, Key, M, F, A) ->
     {ok, RetNode, NewP} ->
         store_process(Name, Key, RetNode, NewP),
         gen_server:cast({?MODULE, RetNode}, {link, NewP}),
-        {RetNode, NewP};
+        {ok, NewP};
     {ok, NewP} ->
         store_process(Name, Key, node(NewP), NewP),
         gen_server:cast({?MODULE, node(NewP)}, {link, NewP}),
-        {node(NewP), NewP};
+        {ok, NewP};
     {error, {already_started,OldP}} ->
         store_process(Name, Key, node(OldP), OldP),
-        {node(OldP), OldP};
+        {ok, OldP};
     _Error ->
         {error, enoproc}
     end.
