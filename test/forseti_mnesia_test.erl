@@ -10,10 +10,9 @@
 -define(NODE1, forseti1_mnesia@localhost).
 -define(NODE2, forseti2_mnesia@localhost).
 -define(NODE3, forseti3_mnesia@localhost).
+-define(NODE_OFF, forseti_off_mnesia@localhost).
 
--define(NODE1_SHORT, forseti1_mnesia).
--define(NODE2_SHORT, forseti2_mnesia).
--define(NODE3_SHORT, forseti3_mnesia).
+-define(NODES_T, [?NODE1, ?NODE2, ?NODE3, ?NODE_OFF]).
 
 %% -- generator
 
@@ -26,7 +25,8 @@ generator_test_() ->
             fun load_test/1,
             fun lock_test/1,
             fun ret_error/1,
-            fun throw_error/1
+            fun throw_error/1,
+            fun started_error/1
         ]
     }.
 
@@ -46,18 +46,21 @@ init_forseti(ParentPID, Paths, Call, Nodes) ->
 
 start() ->
     net_kernel:start([?NODE_TEST, shortnames]),
-    slave:start(localhost, ?NODE1_SHORT),
-    slave:start(localhost, ?NODE2_SHORT),
-    slave:start(localhost, ?NODE3_SHORT),
+    slave:start(localhost, forseti_common:short_name(?NODE1)),
+    slave:start(localhost, forseti_common:short_name(?NODE2)),
+    slave:start(localhost, forseti_common:short_name(?NODE3)),
+    slave:start(localhost, forseti_common:short_name(?NODE_OFF)),
 
     timer:sleep(1000),
     Call = {forseti_common, start_link, []},
-    Args = [self(), code:get_path(), Call, nodes()],
+    Args = [self(), code:get_path(), Call, ?NODES_T],
     lists:foreach(fun(Node) ->
         rpc:cast(Node, ?MODULE, init_forseti, Args),
         timer:sleep(500)
     end, nodes()),
     [ receive ok -> ok end || _ <- lists:seq(1,3) ],
+    timer:sleep(500),
+    slave:stop(?NODE_OFF),
     ok.
 
 stop(_) ->
@@ -83,6 +86,9 @@ ret_error(_) ->
 
 throw_error(_) ->
     forseti_common:throw_error(?NODE1).
+
+started_error(_) ->
+    forseti_common:started_error(?NODE1).
 
 lock_test(_) ->
     [{timeout, 60, ?_assert(begin

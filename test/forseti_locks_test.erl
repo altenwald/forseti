@@ -10,10 +10,7 @@
 -define(NODE1, forseti1_locks@localhost).
 -define(NODE2, forseti2_locks@localhost).
 -define(NODE3, forseti3_locks@localhost).
-
--define(NODE1_SHORT, forseti1_locks).
--define(NODE2_SHORT, forseti2_locks).
--define(NODE3_SHORT, forseti3_locks).
+-define(NODE_OFF, forseti_off_locks@localhost).
 
 -define(NODES_T, [?NODE1, ?NODE2, ?NODE3]).
 
@@ -28,7 +25,8 @@ generator_test_() ->
             fun load_test/1,
             fun lock_test/1,
             fun ret_error/1,
-            fun throw_error/1
+            fun throw_error/1,
+            fun started_error/1
         ]
     }.
 
@@ -47,9 +45,9 @@ start() ->
     net_kernel:start([?NODE_TEST, shortnames]),
 
     Call = {forseti_common, start_link, []},
-    Args = [self(), code:get_path(), Call, ?NODES_T],
+    Args = [self(), code:get_path(), Call, [?NODE_OFF|?NODES_T]],
     PIDs = lists:map(fun(Node) ->
-        ShortName = list_to_atom(hd(string:tokens(atom_to_list(Node),"@"))),
+        ShortName = forseti_common:short_name(Node),
         slave:start(localhost, ShortName),
         timer:sleep(500),
         PID = spawn(fun() ->
@@ -88,3 +86,6 @@ ret_error(_) ->
 
 throw_error(_) ->
     forseti_common:throw_error(?NODE1).
+
+started_error(_) ->
+    forseti_common:started_error(?NODE1).

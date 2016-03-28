@@ -5,11 +5,20 @@
 
 %% -- code for the pool
 
+gen_proc() ->
+    spawn_link(fun() ->
+        receive _ -> ok end
+    end).
+
 start_link(<<"delay",_/integer>>) ->
     timer:sleep(2000),
-    {ok, spawn_link(fun() ->
-        receive _ -> ok end
-    end)};
+    {ok, gen_proc()};
+
+start_link(started) ->
+    PID = spawn_link(fun() ->
+        receive {ok,P} -> P ! already_started end
+    end),
+    {error, {already_started, PID}};
 
 start_link(throw_error) ->
     throw(enoproc);
@@ -18,14 +27,15 @@ start_link(ret_error) ->
     {error, notfound};
 
 start_link(_Key) ->
-    {ok, spawn_link(fun() ->
-        receive _ -> ok end
-    end)}.
+    {ok, gen_proc()}.
 
 start_link(_Key, arg1, arg2, arg3) ->
-    {ok, spawn_link(fun() ->
-        receive _ -> ok end
-    end)}.
+    {ok, gen_proc()}.
+
+%% -- helpers
+
+short_name(Node) ->
+    list_to_atom(hd(string:tokens(atom_to_list(Node),"@"))).
 
 %% -- tests
 
@@ -122,6 +132,14 @@ lock_test(NODE1, NODE2, NODE3) ->
         0 =:= proplists:get_value(NODE2, EmptyNodes) andalso
         0 =:= proplists:get_value(NODE3, EmptyNodes)
     end)}].
+
+started_error(NODE1) ->
+    ?_assert(begin
+        {ok,PID} = rpc:call(NODE1, forseti, get_key, [started]),
+        PID ! {ok, self()},
+        receive already_started -> ok end,
+        true
+    end).
 
 ret_error(NODE1) ->
     ?_assert(begin
