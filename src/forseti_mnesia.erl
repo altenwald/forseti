@@ -35,6 +35,14 @@
 }).
 
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
+-ifndef(TEST).
+-define(debugFmt(A,B), (ok)).
+-endif.
+
 -spec start_link([node()]) -> {ok, pid()} | {error, term()}.
 
 start_link(Nodes) ->
@@ -43,18 +51,15 @@ start_link(Nodes) ->
 -spec choose_node() -> node().
 
 choose_node() ->
-    KeyMin = lists:foldl(fun
+    {KeyMin,_} = lists:foldl(fun
+        ({Key,Val},{_,undefined}) ->
+            {Key,Val};
         ({Key,Val},{_KeyMin,ValMin}) when Val < ValMin ->
             {Key,Val};
         ({_Key,_Val},{KeyMin,ValMin}) ->
-            {KeyMin,ValMin};
-        ({Key,Val},undefined) ->
-            {Key,Val}
-    end, undefined, get_metrics()),
-    case KeyMin of
-        undefined -> node();
-        {K,_} -> K
-    end.
+            {KeyMin,ValMin}
+    end, {node(),undefined}, get_metrics()),
+    KeyMin.
 
 -spec get_metrics() -> [{node(), pos_integer()}].
 
@@ -214,10 +219,6 @@ release(Node, PID) ->
 generate_process(Name, Key, M, F, A) ->
     Node = choose_node(),
     case rpc:call(Node, M, F, A) of
-    {ok, RetNode, NewP} ->
-        store_process(Name, Key, RetNode, NewP),
-        gen_server:cast({?MODULE, RetNode}, {link, NewP}),
-        {ok, NewP};
     {ok, NewP} ->
         store_process(Name, Key, node(NewP), NewP),
         gen_server:cast({?MODULE, node(NewP)}, {link, NewP}),
