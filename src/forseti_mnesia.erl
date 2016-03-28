@@ -148,9 +148,6 @@ handle_cast({add_call, Name, Call}, Calls) ->
 
 handle_info({'EXIT', PID, _Info}, State) ->
     release(node(PID), PID),
-    {noreply, State};
-
-handle_info(_Info, State) ->
     {noreply, State}.
 
 terminate(_Reason, _State) ->

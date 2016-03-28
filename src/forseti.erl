@@ -83,7 +83,7 @@ get_metrics() ->
 
 %@deprecated
 get_key(Key) ->
-    get_key(Key, []).
+    get(default, Key).
 
 -spec get_key(Key :: any(), Args :: [term()]) ->
     {node(), pid()} | {error, Reason::atom()}.

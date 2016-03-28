@@ -41,14 +41,9 @@ start(_StartType, _StartArgs) ->
     Call = proplists:get_value(call, Conf),
     Nodes = proplists:get_value(nodes, Conf, [node()]),
     Backend = proplists:get_value(backend, Conf, locks),
-    case forseti_sup:start_link(Backend, MaxRetries, MaxTime, Nodes) of
-        {ok, PID} ->
-            process(Call),
-            {ok, PID};
-        Error ->
-            ?debugFmt("error: ~p~n", [Error]),
-            Error
-    end.
+    {ok, PID} = forseti_sup:start_link(Backend, MaxRetries, MaxTime, Nodes),
+    process(Call),
+    {ok, PID}.
 
 -spec stop(State :: term()) -> term().
 stop(_State) ->
@@ -64,8 +59,7 @@ get_mod_backend(mnesia) -> forseti_mnesia;
 get_mod_backend(locks) -> forseti_locks;
 get_mod_backend({ok, gen_leader}) -> forseti_leader;
 get_mod_backend({ok, mnesia}) -> forseti_mnesia;
-get_mod_backend({ok, locks}) -> forseti_locks;
-get_mod_backend(undefined) -> throw(ebackendnotdefined).
+get_mod_backend({ok, locks}) -> forseti_locks.
 
 %%%===================================================================
 %%% Internal functions
