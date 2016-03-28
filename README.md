@@ -76,6 +76,44 @@ end
 
 Enjoy!
 
+## Multi Call Configuration
+
+When you need to use forseti for more than one group of processes in the same virtual machine, you need to configure several calls to initiate the new processes and even a way to avoid collisions to the other configurations.
+
+Note that if you don't use this new set of functions, you are using `default` keyword for locate your unique configuration actually.
+
+The configuration could be in this way:
+
+```erlang
+{forseti, [
+    %% max_retries and max_time defines the maximum restart frequency for the supervisor
+    {max_retries, 20},                           %% 20 by default, no mandatory
+    {max_time, 10 },                             %% 10 by default, no mandatory
+    {nodes, ['node1@server1', 'node2@server2']}, %% [node()] by default, no mandatory
+    {call, [                                     %% mandatory
+        {default, {test_forseti, start_link, []}},
+        {users, {users, start_link, []}}
+    ]}
+]}
+```
+
+Using `start_link` you can start forseti using this way:
+
+```erlang
+forseti:start_link([node1@server1, node2@server2]),
+forseti:add_call(default, {test_forseti, start_link, []}),
+forseti:add_call(users, {users, start_link, []}),
+```
+
+For the first configuration (`default`) you can still continue using the functions you saw in the previous sections. If you want to use explicitly `default` or if you want to use `users`, you need to do it in this way:
+
+```erlang
+{ok,PID} = forseti:get(default, <<"mykey1">>),
+{ok,PID} = forseti:find(default, <<"mykey1">>),
+```
+
+The new functions are `forseti:get/2`, `forseti:get/3` and `forseti:find/2`.
+
 ## Backends
 
 Use only gen_server has several pros and cons so, I added more backends (with more pros and cons too) to let you decide what's the better implementation for your development.

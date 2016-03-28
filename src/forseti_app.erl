@@ -17,6 +17,14 @@
 
 -include("forseti.hrl").
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
+-ifndef(TEST).
+-define(debugFmt(A,B), (ok)).
+-endif.
+
 %%%===================================================================
 %%% Application callbacks
 %%%===================================================================
@@ -33,11 +41,13 @@ start(_StartType, _StartArgs) ->
     Call = proplists:get_value(call, Conf),
     Nodes = proplists:get_value(nodes, Conf, [node()]),
     Backend = proplists:get_value(backend, Conf, locks),
-    case Call of
-    undefined ->
-        {ok, self()};
-    _ ->
-        forseti_sup:start_link(Backend, MaxRetries, MaxTime, Call, Nodes)
+    case forseti_sup:start_link(Backend, MaxRetries, MaxTime, Nodes) of
+        {ok, PID} ->
+            process(Call),
+            {ok, PID};
+        Error ->
+            ?debugFmt("error: ~p~n", [Error]),
+            Error
     end.
 
 -spec stop(State :: term()) -> term().
@@ -60,3 +70,13 @@ get_mod_backend(undefined) -> throw(ebackendnotdefined).
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+process([]) ->
+    ok;
+
+process({M,F,A}) ->
+    process([{default, {M,F,A}}]);
+
+process([{Name, {M,F,A}}|Calls]) when is_atom(Name) ->
+    forseti:add_call(Name, {M, F, A}),
+    process(Calls).
