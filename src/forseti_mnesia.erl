@@ -16,7 +16,6 @@
 -export([
     choose_node/0,
     get_metrics/0,
-    get/2,
     get/3,
     find/2,
     add_call/2
@@ -74,11 +73,6 @@ get_metrics() ->
         end, [], mnesia:all_keys(forseti_nodes))
     end),
     ActiveFull.
-
--spec get(call_name(), key()) -> {ok, pid()} | {error, reason()}.
-
-get(Name, Key) ->
-    get(Name, Key, []).
 
 -spec get(call_name(), key(), Args::[term()]) ->
     {ok, pid()} | {error, reason()}.

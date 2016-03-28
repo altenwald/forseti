@@ -59,9 +59,6 @@ stop() ->
 init([]) ->
     {ok, #state{}}.
 
-handle_call({get, Name, Key}, From, State) ->
-    handle_call({get, Name, Key, []}, From, State);
-
 handle_call({get, Name, Key, Args}, From, #state{keys=Keys}=State) ->
     case dict:find({Name,Key}, Keys) of
     error ->

@@ -35,7 +35,6 @@
 -export([
     choose_node/0,
     get_metrics/0,
-    get/2,
     get/3,
     find/2,
     add_call/2
@@ -83,11 +82,6 @@ choose_node() ->
 
 get_metrics() ->
     locks_leader:call(?MODULE, get_metrics).
-
--spec get(call_name(), key()) -> {ok, pid()} | {error, reason()}.
-
-get(Name, Key) ->
-    gen_server:call(forseti_locks_server, {get, Name, Key, []}).
 
 -spec get(call_name(), key(), Args::[term()]) -> {ok, pid()} | {error, reason()}.
 
