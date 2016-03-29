@@ -12,7 +12,7 @@
 %% ------------------------------------------------------------------
 
 -export([
-    start_link/2,
+    start_link/1,
     stop/0
 ]).
 
@@ -34,18 +34,16 @@
 -export([
     choose_node/0,
     get_metrics/0,
-    get_key/1,
-    get_key/2,
-    search_key/1
+    get/3,
+    find/2,
+    add_call/2
 ]).
 
 -record(state, {
     nodes :: [atom()],
     keys = dict:new() :: ?DICT_TYPE,
     node_keys = dict:new() :: ?DICT_TYPE,
-    module :: atom(),
-    function :: atom(),
-    args :: [any()]
+    calls = dict:new() :: ?DICT_TYPE
 }).
 
 -ifdef(TEST).
@@ -60,12 +58,10 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
--spec start_link(
-    {Module :: atom(), Function :: atom(), Args :: [any()]},
-    Nodes::[atom()]) -> {ok, pid()} | {error, term()}.
+-spec start_link(Nodes::[node()]) -> {ok, pid()} | {error, term()}.
 
-start_link({_M,_F,_A}=Launch, Nodes) ->
-    gen_leader:start_link(?SERVER, Nodes, [], ?MODULE, [Launch,Nodes], []).
+start_link(Nodes) ->
+    gen_leader:start_link(?SERVER, Nodes, [], ?MODULE, [Nodes], []).
 
 -spec stop() -> ok.
 
@@ -82,22 +78,21 @@ choose_node() ->
 get_metrics() ->
     gen_leader:call(?MODULE, get_metrics).
 
--spec get_key(Key::term()) -> {node(), pid()} | {error, Reason::atom()}.
+-spec get(call_name(), Key::term(), Args::[term()]) ->
+    {ok, pid()} | {error, Reason::atom()}.
 
-get_key(Key) ->
-    gen_server:call(forseti_leader_server, {get_key, Key}).
+get(Name, Key, Args) ->
+    gen_server:call(forseti_leader_server, {get, Name, Key, Args}).
 
--spec get_key(
-    Key::term(), Args::[term()]) -> 
-    {node(), pid()} | {error, Reason::atom()}.
+-spec find(call_name(), Key::term()) -> {ok, pid()} | undefined.
 
-get_key(Key, Args) ->
-    gen_server:call(forseti_leader_server, {get_key, Key, Args}).
+find(Name, Key) ->
+    gen_server:call(forseti_leader_server, {find, Name, Key}).
 
--spec search_key(Key::term()) -> {node(), pid()} | undefined.
+-spec add_call(call_name(), call()) -> ok.
 
-search_key(Key) ->
-    gen_server:call(forseti_leader_server, {search, Key}).
+add_call(Name, Call) ->
+    gen_leader:leader_cast(?MODULE, {add_call, Name, Call}).
 
 %% ------------------------------------------------------------------
 %% gen_leader Function Definitions
@@ -109,7 +104,7 @@ elected(#state{node_keys=NK}=State, _Election, undefined) ->
         _ -> State
     end,
     {ok, NewState, NewState};
- 
+
 elected(#state{node_keys=NK}=State, Election, Node) ->
     NewState = case dict:find(Node, NK) of
         error -> State#state{node_keys=dict:store(Node, 0, NK)};
@@ -117,30 +112,29 @@ elected(#state{node_keys=NK}=State, Election, Node) ->
     end,
     gen_leader:broadcast({from_leader, NewState}, [Node], Election),
     {ok, NewState, NewState}.
- 
+
 
 surrendered(State, _Synch, _Election) ->
     {ok, State}.
- 
+
 
 handle_leader_call(_Request, _From, State, _Election) ->
     {reply, ok, State}.
- 
 
-handle_leader_cast({search, Key, From}, #state{keys=Keys}=State, _Election) ->
-    case dict:find(Key, Keys) of
+
+handle_leader_cast({find, Name, Key, From}, #state{keys=Keys}=State, _Election) ->
+    case dict:find({Name, Key}, Keys) of
     error ->
-        gen_server:reply(From, undefined), 
-        {noreply, State}; 
-    {ok, {Node,PID}} ->
-        gen_server:reply(From, {Node,PID}), 
+        gen_server:reply(From, undefined),
+        {noreply, State};
+    {ok, {_Node,PID}} ->
+        gen_server:reply(From, {ok,PID}),
         {noreply, State}
     end;
 
-handle_leader_cast({get_key,Key,NewArgs,From}, #state{
-        keys=Keys, node_keys=NK, nodes=Nodes,
-        module=Module, function=Function, args=Args}=State, _Election) ->
-    {Node,PID} = case dict:find(Key, Keys) of
+handle_leader_cast({get, Name, Key, NewArgs, From}, #state{
+        keys=Keys, node_keys=NK, nodes=Nodes}=State, _Election) ->
+    {Node,PID} = case dict:find({Name,Key}, Keys) of
         error -> {undefined, undefined};
         {ok,{N,P}} -> {N,P}
     end,
@@ -150,29 +144,32 @@ handle_leader_cast({get_key,Key,NewArgs,From}, #state{
         {noreply, State};
     _ ->
         try
+            Calls = State#state.calls,
+            {Module, Function, Args} = forseti_lib:get_call(Name, Calls),
             Params = [Key|Args] ++ NewArgs,
             {NewNode, NewPID} = case rpc:call(
                     choose_node(NK,Nodes), Module, Function, Params) of
-                {ok, RetNode, NewP} -> 
+                {ok, RetNode, NewP} ->
                     {RetNode, NewP};
-                {ok, NewP} -> 
+                {ok, NewP} ->
                     {node(NewP), NewP};
-                {error, {already_started,OldP}} -> 
+                {error, {already_started,OldP}} ->
                     {node(OldP), OldP};
                 {error, _Reason} ->
                     throw(enoproc)
             end,
-            NewKeys = dict:store(Key, {NewNode,NewPID}, Keys),
-            NewNK = increment(NewNode, NK),
+            NewKeys = dict:store({Name,Key}, {NewNode,NewPID}, Keys),
+            NewNK = dict:update_counter(NewNode, 1, NK),
             NewState = State#state{node_keys=NewNK,keys=NewKeys},
             gen_server:reply(From, {ok, NewPID}),
-            gen_server:cast(forseti_leader_server, {add, Key, {NewNode,NewPID}}),
+            Send = {add, Name, Key, {NewNode,NewPID}},
+            gen_server:cast(forseti_leader_server, Send),
             case NewNode =:= node() of
                 true -> link(NewPID);
                 false -> ok
             end,
-            {ok, {add, Key, {NewNode, NewPID}, NewNK}, NewState}
-        catch 
+            {ok, {add, Name, Key, {NewNode, NewPID}, NewNK}, NewState}
+        catch
             % the remote node is falling down, repeat the action
             _:{badmatch,{badrpc,_}} ->
                 gen_leader:leader_cast(?MODULE, {get_key,Key,From}),
@@ -187,42 +184,47 @@ handle_leader_cast({get_key,Key,NewArgs,From}, #state{
     end;
 
 handle_leader_cast({free,Node,PID}, #state{node_keys=NK, keys=Keys}=State, _Election) ->
-    Key = dict:fold(fun
+    NameKey = dict:fold(fun
         (K,{N,P},undefined) when N =:= Node andalso P =:= PID -> K;
         (_,_,P) -> P
     end, undefined, Keys),
-    case Key of
-    undefined -> 
+    case NameKey of
+    undefined ->
         {ok, State};
-    Key ->
-        NewKeys = dict:erase(Key, Keys),
-        NewNK = case dict:find(Node, NK) of
-            error -> NK;
-            {ok,Value} -> dict:store(Node, Value-1, NK)
-        end,
+    {Name,Key} ->
+        NewKeys = dict:erase(NameKey, Keys),
+        NewNK = dict:update_counter(Node, -1, NK),
         NewState = State#state{node_keys=NewNK, keys=NewKeys},
-        gen_server:cast(forseti_leader_server, {del, Key}),
-        {ok, {del, Key, NewNK}, NewState}
+        gen_server:cast(forseti_leader_server, {del, Name, Key}),
+        {ok, {del, Name, Key, NewNK}, NewState}
     end;
+
+handle_leader_cast({add_call,Name,{M,F,A}}, State, _Election) ->
+    NewCalls = dict:store(Name, {M,F,A}, State#state.calls),
+    {ok, {add_call,Name,{M,F,A}}, State#state{calls=NewCalls}};
 
 handle_leader_cast(_Request, State, _Election) ->
     {noreply, State}.
- 
 
-from_leader({del, Key, NodeKeys}, #state{keys=Keys}=State, _Election) ->
-    gen_server:cast(forseti_leader_server, {del, Key}),
-    {ok, State#state{node_keys=NodeKeys, keys=dict:erase(Key, Keys)}};
 
-from_leader({add, Key, {Node, PID}=Value, NodeKeys}, 
+from_leader({del, Name, Key, NodeKeys}, #state{keys=Keys}=State, _Election) ->
+    gen_server:cast(forseti_leader_server, {del, Name, Key}),
+    {ok, State#state{node_keys=NodeKeys, keys=dict:erase({Name,Key}, Keys)}};
+
+from_leader({add, Name, Key, {Node, PID}=Value, NodeKeys},
         #state{keys=Keys}=State, _Election) when Node =:= node() ->
     link(PID),
-    gen_server:cast(forseti_leader_server, {add, Key, {Node, PID}}),
-    {ok, State#state{node_keys=NodeKeys, keys=dict:store(Key, Value, Keys)}};
+    gen_server:cast(forseti_leader_server, {add, Name, Key, {Node, PID}}),
+    {ok, State#state{node_keys=NodeKeys, keys=dict:store({Name,Key}, Value, Keys)}};
 
-from_leader({add, Key, {Node, PID}=Value, NodeKeys}, 
+from_leader({add, Name, Key, {Node, PID}=Value, NodeKeys},
         #state{keys=Keys}=State, _Election) ->
-    gen_server:cast(forseti_leader_server, {add, Key, {Node, PID}}),
-    {ok, State#state{node_keys=NodeKeys, keys=dict:store(Key, Value, Keys)}};
+    gen_server:cast(forseti_leader_server, {add, Name, Key, {Node, PID}}),
+    {ok, State#state{node_keys=NodeKeys, keys=dict:store({Name,Key}, Value, Keys)}};
+
+from_leader({add_call, Name, Call}, State, _Election) ->
+    NewCalls = dict:store(Name, Call, State#state.calls),
+    {ok, State#state{calls=NewCalls}};
 
 from_leader(#state{}=State, _OldState, _Election) ->
     gen_server:cast(forseti_leader_server, {keys, State#state.keys}),
@@ -231,14 +233,14 @@ from_leader(#state{}=State, _OldState, _Election) ->
 from_leader(_Info, State, _Election) ->
     ?debugFmt("Received from_leader in ~p data: ~p~n", [node(),_Info]),
     {ok, State}.
- 
+
 
 handle_DOWN(Node, #state{keys=Keys,node_keys=NK}=State, _Election) ->
     NewNK = dict:erase(Node, NK),
     NewKeys = dict:filter(fun
         (_Key, {N,_P}) when N =/= Node -> true;
         (_Key, _Value) -> false
-    end, Keys), 
+    end, Keys),
     NewState = State#state{keys=NewKeys,node_keys=NewNK},
     {ok, NewState, NewState}.
 
@@ -246,13 +248,9 @@ handle_DOWN(Node, #state{keys=Keys,node_keys=NK}=State, _Election) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init([{Module,Function,Args}, Nodes]) ->
-    process_flag(trap_exit, true), 
-    {ok, #state{
-        nodes=Nodes,
-        module=Module,
-        function=Function,
-        args=Args}}.
+init([Nodes]) ->
+    process_flag(trap_exit, true),
+    {ok, #state{nodes=Nodes}}.
 
 handle_call(get_metrics, _From, #state{node_keys=NK}=State, _Election) ->
     {reply, dict:to_list(NK), State};
@@ -270,7 +268,7 @@ handle_cast(_Msg, State, _Election) ->
     {noreply, State}.
 
 handle_info({'EXIT', PID, _Info}, State, _Election) ->
-    gen_leader:leader_cast(?MODULE, {free, node(), PID}), 
+    gen_leader:leader_cast(?MODULE, {free, node(), PID}),
     {noreply, State};
 
 handle_info(_Info, State, _Election) ->
@@ -315,12 +313,4 @@ choose_node(NK, Nodes) ->
     case KeyMin of
         undefined -> node();
         {K,_} -> K
-    end.
-
-increment(Node, NK) ->
-    case dict:find(Node, NK) of
-        error ->
-            dict:store(Node, 1, NK);
-        {ok, Value} ->
-            dict:store(Node, Value+1, NK)
     end.

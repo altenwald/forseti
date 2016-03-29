@@ -58,31 +58,28 @@ stop() ->
 init([]) ->
     {ok, #state{}}.
 
-handle_call({get_key, Key}, From, State) ->
-    handle_call({get_key, Key, []}, From, State);
-
-handle_call({get_key, Key, Args}, From, #state{keys=Keys}=State) ->
-    case dict:find(Key, Keys) of
+handle_call({get, Name, Key, Args}, From, #state{keys=Keys}=State) ->
+    case dict:find({Name,Key}, Keys) of
     error ->
-        gen_leader:leader_cast(forseti_leader, {get_key, Key, Args, From}),
+        gen_leader:leader_cast(forseti_leader, {get, Name, Key, Args, From}),
         {noreply, State};
     {ok, {Node,PID}} ->
-        case check(node(), Node, PID) of
+        case forseti_lib:is_alive(Node, PID) of
         true ->
             {reply, {ok,PID}, State};
         _ ->
-            gen_leader:leader_cast(forseti_leader, {get_key, Key, Args, From}),
+            gen_leader:leader_cast(forseti_leader, {get, Name, Key, Args, From}),
             {noreply, State}
         end
     end;
 
-handle_call({search, Key}, From, #state{keys=Keys}=State) ->
-    case dict:find(Key, Keys) of
+handle_call({find, Name, Key}, From, #state{keys=Keys}=State) ->
+    case dict:find({Name,Key}, Keys) of
     error ->
-        gen_leader:leader_cast(forseti_leader, {search, Key, From}),
-        {noreply, State}; 
-    {ok, {Node,PID}} ->
-        {reply, {Node,PID}, State}
+        gen_leader:leader_cast(forseti_leader, {find, Name, Key, From}),
+        {noreply, State};
+    {ok, {_Node,PID}} ->
+        {reply, {ok,PID}, State}
     end;
 
 handle_call(stop, _From, State) ->
@@ -91,11 +88,11 @@ handle_call(stop, _From, State) ->
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
-handle_cast({add, Key, Value}, #state{keys=Keys}=State) ->
-    {noreply, State#state{keys = dict:store(Key, Value, Keys)}};
+handle_cast({add, Name, Key, Value}, #state{keys=Keys}=State) ->
+    {noreply, State#state{keys = dict:store({Name, Key}, Value, Keys)}};
 
-handle_cast({del, Key}, #state{keys=Keys}=State) ->
-    {noreply, State#state{keys = dict:erase(Key, Keys)}};
+handle_cast({del, Name, Key}, #state{keys=Keys}=State) ->
+    {noreply, State#state{keys = dict:erase({Name, Key}, Keys)}};
 
 handle_cast({keys, Keys}, State) ->
     {noreply, State#state{keys=Keys}};
@@ -115,9 +112,3 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
-
-check(_MyNode, undefined, _PID) -> false;
-check(_MyNode, _Node, undefined) -> false;
-check(Node, Node, PID) -> is_process_alive(PID);
-check(_MyNode, Node, PID) -> 
-    catch rpc:call(Node, erlang, is_process_alive, [PID]).

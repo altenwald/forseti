@@ -4,7 +4,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/5]).
+-export([start_link/4]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -16,9 +16,9 @@
 %% API functions
 %% ===================================================================
 
-start_link(Backend, MaxR, MaxT, Call, Nodes) ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, 
-        [Backend, MaxR, MaxT, Call, Nodes]).
+start_link(Backend, MaxR, MaxT, Nodes) ->
+    supervisor:start_link({local, ?MODULE}, ?MODULE,
+        [Backend, MaxR, MaxT, Nodes]).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -33,21 +33,21 @@ start_link(Backend, MaxR, MaxT, Call, Nodes) ->
 %%                     {error, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init([Backend, MaxR, MaxT, Call, Nodes]) ->
+init([Backend, MaxR, MaxT, Nodes]) ->
     Module = forseti_app:get_mod_backend(Backend),
-    Children = servers(Module, Call, Nodes),
+    Children = servers(Module, Nodes),
     {ok, {{one_for_all, MaxR, MaxT}, Children}}.
 
-servers(forseti_leader, Call, Nodes) -> [
+servers(forseti_leader, Nodes) -> [
     ?CHILD(forseti_leader_server, []),
-    ?CHILD(forseti_leader, [Call, Nodes])
+    ?CHILD(forseti_leader, [Nodes])
 ];
 
-servers(forseti_locks, Call, Nodes) -> [
+servers(forseti_locks, Nodes) -> [
     ?CHILD(forseti_locks_server, []),
-    ?CHILD(forseti_locks, [Call, Nodes])
+    ?CHILD(forseti_locks, [Nodes])
 ];
 
-servers(Module, Call, Nodes) -> [
-    ?CHILD(Module, [Call, Nodes])
+servers(Module, Nodes) -> [
+    ?CHILD(Module, [Nodes])
 ].
