@@ -1,5 +1,5 @@
 language: erlang
-sudo: false
+sudo: required
 script: "make compile test"
 install: "sudo pip install codecov"
 after_success: "codecov"
