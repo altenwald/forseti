@@ -1,6 +1,8 @@
 language: erlang
 sudo: false
-script: "./rebar get-deps compile && ./rebar skip_deps=true eunit"
+script: "make compile test"
+install: "sudo pip install codecov"
+after_success: "codecov"
 otp_release:
    - 19.3
    - 19.2

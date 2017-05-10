@@ -20,6 +20,10 @@ compile: deps
 
 test: deps
 	./rebar eunit skip_deps=true
+	./covertool \
+		-cover .eunit/eunit.coverdata \
+		-appname ephp \
+		-output cobertura.xml
 
 .PHONY: doc test compile force-deps all
 
