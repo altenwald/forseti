@@ -5,22 +5,18 @@ forseti
 [![Codecov](https://img.shields.io/codecov/c/github/altenwald/forseti.svg)](https://codecov.io/gh/altenwald/forseti)
 [![License: LGPL 2.1](https://img.shields.io/badge/License-GNU%20Lesser%20General%20Public%20License%20v2.1-blue.svg)](https://raw.githubusercontent.com/altenwald/forseti/master/COPYING)
 
-[Forseti](http://en.wikipedia.org/wiki/Forseti) is a balancer and distribution system for Erlang processes. The basic idea for this system is keep a basic leader/worker structure for keep a process dictionary. When is needed a new process, the request should be done to the leader, the leader spawns a new process in a worker (less used worker) and do that the worker monitor the new process. If the process die or finish its running, the worker removes the process from the dictionary (sends a request for that to the leader).
+[Forseti](http://en.wikipedia.org/wiki/Forseti) is a balancer and distribution system for Erlang processes. The basic idea for this system is keep a basic leader/worker structure to store a process dictionary. When is needed a new process, the request should be done to the leader, the leader spawns a new process in a worker (less used worker) and the worker starts to monitor the new process. If the process dies or finishes, the worker removes the process from the dictionary (sends a request for that to the leader).
 
-When is needed to access to an existent process, the search is done in the workers and if the search is not ok, then the worker send the params to the leader. If the leader doesn't find the process then can do two things:
+When is needed to access to an existent process, the search is done in the workers and if the search is unsuccessful, the worker send the params to the leader. If the leader doesn't find the process then it has two options:
 
- * Create a new process and return its PID.
- * Return `undefined`.
+ * Creates a new process and returns its PID (if you used `forseti:get_key/1`).
+ * Returns `undefined` (if you used `forseti:search/1`).
 
-> IMPORTANT: forseti is designed using C (consistency) and A (availability) from the [C-A-P theorem](http://en.wikipedia.org/wiki/CAP_theorem). We prefer to use forseti in a private network with a controlled connection between nodes. If you need to use forseti with connection between NOC (even if you use a VPN) is not recommended because you perhaps need to use somthing with P (partition-tolerant) and [evetual consistency](http://en.wikipedia.org/wiki/Eventual_consistency).
+> IMPORTANT: forseti is designed using C (consistency) and A (availability) from the [C-A-P theorem](http://en.wikipedia.org/wiki/CAP_theorem). We prefer to use forseti in a private network with a controlled connection between nodes. If you need to use different NOCs (even if you use a VPN) is not recommended to use forseti. In this situation you'll require partition-tolerant and [eventual consistency](http://en.wikipedia.org/wiki/Eventual_consistency).
 
 ## Getting started
 
-The implementation is very easy:
-
-You can configure it in reltool.config like an OTP application.
-
-An example config (usually app.config)
+The implementation is very easy. You can configure it in `reltool.config` or in case you use **relx** you can add it to the `.app` file only. An example config (usually `app.config` or `sys.config`):
 
 **IMPORTANT** if you use this way, you'll be sure forseti is loaded after all the needed resources for start to launch processes.
 
@@ -34,7 +30,7 @@ An example config (usually app.config)
 ]}
 ```
 
-Else you can use it in this way
+Otherwise you can use it in this way:
 
 ```erlang
 Call = {test_forseti, start_link, []},
@@ -42,14 +38,14 @@ Nodes = [node1@server1, node2@server2],
 forseti:start_link(Call, Nodes),
 ```
 
-The basic implementation for `test_forseti` should be a gen_server with a start_link as following:
+The basic implementation for `test_forseti` should be a **gen_server** with a `start_link` as follows:
 
 ```erlang
 start_link(_Key) ->
     gen_server:start_link(?MODULE, [], []).
 ```
 
-The function passed as param in the form `{M,F,A}` should has the first param as `Key`.
+The function passed as a param in the form `{M,F,A}` should has the first param as `Key`.
 
 For get a PID you can use the following function:
 
@@ -80,7 +76,7 @@ Enjoy!
 
 When you need to use forseti for more than one group of processes in the same virtual machine, you need to configure several calls to initiate the new processes and even a way to avoid collisions to the other configurations.
 
-Note that if you don't use this new set of functions, you are using `default` keyword for locate your unique configuration actually.
+Note that if you don't use this new set of functions, you are using `default` keyword to locate your unique configuration actually.
 
 The configuration could be in this way:
 
