@@ -1,8 +1,8 @@
 
 
-# ePHP #
+# Forseti #
 
-Copyright (c) 2013-2017 Altenwald Solutions, S.L.
+Copyright (c) 2014-2017 Altenwald Solutions, S.L.
 
 __Authors:__ "Manuel Rubio" ([`manuel@altenwald.com`](mailto:manuel@altenwald.com)).
 
@@ -194,13 +194,13 @@ In configuration file:
 
 
 <table width="100%" border="0" summary="list of modules">
-<tr><td><a href="http://github.com/altenwald/forseti/blob/hex/doc/forseti.md" class="module">forseti</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/hex/doc/forseti_app.md" class="module">forseti_app</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/hex/doc/forseti_leader.md" class="module">forseti_leader</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/hex/doc/forseti_leader_server.md" class="module">forseti_leader_server</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/hex/doc/forseti_lib.md" class="module">forseti_lib</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/hex/doc/forseti_locks.md" class="module">forseti_locks</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/hex/doc/forseti_locks_server.md" class="module">forseti_locks_server</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/hex/doc/forseti_mnesia.md" class="module">forseti_mnesia</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/hex/doc/forseti_sup.md" class="module">forseti_sup</a></td></tr></table>
+<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti.md" class="module">forseti</a></td></tr>
+<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_app.md" class="module">forseti_app</a></td></tr>
+<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_leader.md" class="module">forseti_leader</a></td></tr>
+<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_leader_server.md" class="module">forseti_leader_server</a></td></tr>
+<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_lib.md" class="module">forseti_lib</a></td></tr>
+<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_locks.md" class="module">forseti_locks</a></td></tr>
+<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_locks_server.md" class="module">forseti_locks_server</a></td></tr>
+<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_mnesia.md" class="module">forseti_mnesia</a></td></tr>
+<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_sup.md" class="module">forseti_sup</a></td></tr></table>
 
