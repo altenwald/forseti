@@ -1,5 +1,16 @@
 -module(forseti_common).
--compile([export_all]).
+
+-export([gen_proc/0,
+         start_link/1,
+         start_link/4,
+         short_name/1,
+         basic_test/1,
+         args_test/1,
+         load_test/4,
+         lock_test/3,
+         started_error/1,
+         ret_error/1,
+         throw_error/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 
