@@ -1,6 +1,0 @@
-#!/bin/bash
-
-epmd -daemon
-rm -rf .eunit
-mkdir .eunit
-

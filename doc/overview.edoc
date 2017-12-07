@@ -1,0 +1,148 @@
+@author "Manuel Rubio" <manuel@altenwald.com>
+@copyright 2013-2017 Altenwald Solutions, S.L.
+@title ePHP
+
+@doc
+<a href="https://travis-ci.org/altenwald/forseti"><img src="https://img.shields.io/travis/altenwald/forseti/master.svg" alt="Build Status"/></a>
+<a href='https://codecov.io/gh/altenwald/forseti'><img src='https://img.shields.io/codecov/c/github/altenwald/forseti.svg' alt='Codecov' /></a>
+<a href='https://raw.githubusercontent.com/altenwald/forseti/master/COPYING'><img src='https://img.shields.io/github/license/altenwald/forseti.svg' alt='License: LGPL 2.1'/></a>
+<a href="https://hex.pm/packages/forseti"><img alt="Hex" src="https://img.shields.io/hexpm/v/forseti.svg"/></a>
+
+<a href="http://en.wikipedia.org/wiki/Forseti">Forseti</a> is a balancer and distribution system for Erlang processes. The basic idea for this system is keep a basic leader/worker structure to store a process dictionary. When is needed a new process, the request should be done to the leader, the leader spawns a new process in a worker (less used worker) and the worker starts to monitor the new process. If the process dies or finishes, the worker removes the process from the dictionary (sends a request for that to the leader).
+
+When is needed to access to an existent process, the search is done in the workers and if the search is unsuccessful, the worker send the params to the leader. If the leader doesn't find the process then it has two options:
+
+* Creates a new process and returns its PID (if you used <code>forseti:get_key/1</code>).
+* Returns <code>undefined</code> (if you used <code>forseti:search/1</code>).
+
+&gt; IMPORTANT: forseti is designed using C (consistency) and A (availability) from the <a href="http://en.wikipedia.org/wiki/CAP_theorem">C-A-P theorem</a>. We prefer to use forseti in a private network with a controlled connection between nodes. If you need to use different NOCs (even if you use a VPN) is not recommended to use forseti. In this situation you'll require partition-tolerant and <a href="http://en.wikipedia.org/wiki/Eventual_consistency">eventual consistency</a>.
+
+== Getting started ==
+
+The implementation is very easy. You can configure it in <code>reltool.config</code> or in case you use **relx** you can add it to the <code>.app</code> file only. An example config (usually <code>app.config</code> or <code>sys.config</code>):
+
+**IMPORTANT** if you use this way, you'll be sure forseti is loaded after all the needed resources for start to launch processes.
+
+<pre lang="erlang">{forseti, [
+    %% max_retries and max_time defines the maximum restart frequency for the supervisor
+    {max_retries, 20},                           %% 20 by default, no mandatory
+    {max_time, 10 },                             %% 10 by default, no mandatory
+    {nodes, ['node1@server1', 'node2@server2']}, %% [node()] by default, no mandatory
+    {call, {test_forseti, start_link, []} }      %% mandatory
+]}</pre>
+
+Otherwise you can use it in this way:
+
+<pre lang="erlang">Call = {test_forseti, start_link, []},
+Nodes = [node1@server1, node2@server2],
+forseti:start_link(Call, Nodes),</pre>
+
+The basic implementation for <code>test_forseti</code> should be a **gen_server** with a <code>start_link</code> as follows:
+
+<pre lang="erlang">start_link(_Key) ->
+    gen_server:start_link(?MODULE, [], []).</pre>
+
+The function passed as a param in the form <code>{M,F,A}</code> should has the first param as <code>Key</code>.
+
+For get a PID you can use the following function:
+
+<pre lang="erlang"><![CDATA[{Node,PID} = forseti:get_key(<<"mykey1">>),]]></pre>
+
+Or passing more args to the init function:
+
+<pre lang="erlang"><![CDATA[{Node,PID} = forseti:get_key(<<"mykey1">>, [make_ref()]),]]></pre>
+
+In this case, the function to be called will be <code>start_link/2</code>.
+
+If you only want to search a key and in case this not exist returns <code>undefined</code> you can use:
+
+<pre lang="erlang"><![CDATA[case forseti:search_key(<<"mykey1">>) of
+    undefined -> {error, notfound};
+    {_Node,PID} -> {ok, PID}
+end]]></pre>
+
+Enjoy!
+
+== Multi Call Configuration ==
+
+When you need to use forseti for more than one group of processes in the same virtual machine, you need to configure several calls to initiate the new processes and even a way to avoid collisions to the other configurations.
+
+Note that if you don't use this new set of functions, you are using <code>default</code> keyword to locate your unique configuration actually.
+
+The configuration could be in this way:
+
+<pre lang="erlang">{forseti, [
+    %% max_retries and max_time defines the maximum restart frequency for the supervisor
+    {max_retries, 20},                           %% 20 by default, no mandatory
+    {max_time, 10 },                             %% 10 by default, no mandatory
+    {nodes, ['node1@server1', 'node2@server2']}, %% [node()] by default, no mandatory
+    {call, [                                     %% mandatory
+        {default, {test_forseti, start_link, []}},
+        {users, {users, start_link, []}}
+    ]}
+]}</pre>
+
+Using <code>start_link</code> you can start forseti using this way:
+
+<pre lang="erlang">forseti:start_link([node1@server1, node2@server2]),
+forseti:add_call(default, {test_forseti, start_link, []}),
+forseti:add_call(users, {users, start_link, []}),</pre>
+
+For the first configuration (<code>default</code>) you can still continue using the functions you saw in the previous sections. If you want to use explicitly <code>default</code> or if you want to use <code>users</code>, you need to do it in this way:
+
+<pre lang="erlang"><![CDATA[{ok,PID} = forseti:get(default, <<"mykey1">>),
+{ok,PID} = forseti:find(default, <<"mykey1">>),]]></pre>
+
+The new functions are <code>forseti:get/2</code>, <code>forseti:get/3</code> and <code>forseti:find/2</code>.
+
+== Backends ==
+
+Use only gen_server has several pros and cons so, I added more backends (with more pros and cons too) to let you decide what's the better implementation for your development.
+
+=== gen_leader ===
+
+The first backend I use. It's faster than others, hasn't got SPOF (Single Point Of Failure) but you need to shutdown the cluster to add new nodes. And you can only use <code>gen_leader</code> once by node. If you plan to use <code>gen_leader</code> for your specific implementation, you should use another backend.
+
+This backend is used by default so if you use the system as above, you're using it. But if you want to put in the configuration file or in the <code>start_link</code> function explicitly, you can do it as follow:
+
+<pre lang="erlang">forseti:start_link(gen_leader, Call, Nodes)</pre>
+
+Or in the configuration file:
+
+<pre lang="erlang">{forseti, [
+    {backend, gen_leader},
+    {nodes, [nodes()]},
+    {call, mfa()}
+]}</pre>
+
+=== mnesia ===
+
+As is implemented in <code>ejabberd</code>, you can use <code>mnesia</code> as the store for the processes. This backend lets you add and remove nodes from the cluster without restart the whole cluster. The worst part is the latency. If you plan to use forseti for high load requesting location for processes, creating and removing processes, perhaps you should use another backend.
+
+**IMPORTANT**: the <code>lock_test</code> was not working for mnesia backend because takes a lot of time to release all the processes at the same time and mnesia is not blocked in the meantime. It's dangerous to use this backend if you use it for very short live processes.
+
+To use this backend:
+
+<pre lang="erlang">forseti:start_link(mnesia, Call, Nodes)</pre>
+
+In configuration file:
+
+<pre lang="erlang">{forseti, [
+    {backend, mnesia},
+    {nodes, [nodes()]},
+    {call, mfa()}
+]}</pre>
+
+=== locks ===
+
+A scalable, deadlock-resolving resource locker, based on an algorithm designed by Ulf Wiger. With this backend you can add a new nodes without shutdown the cluster, but you need to start the system with one single node, after you can add more nodes.
+
+To use this backend:
+<pre lang="erlang">forseti:start_link(locks, Call, Nodes)</pre>
+In configuration file:
+
+<pre lang="erlang">{forseti, [
+    {backend, locks},
+    {nodes, [nodes()]},
+    {call, mfa()}
+]}</pre>

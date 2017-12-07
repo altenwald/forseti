@@ -1,4 +1,4 @@
--module(forseti_mnesia_test).
+-module(forseti_mnesia_tests).
 -compile([export_all]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -32,35 +32,36 @@ generator_test_() ->
 
 %% -- initilizer and finisher
 
-init_forseti(ParentPID, Paths, Call, Nodes) ->
-    lists:foreach(fun(Path) ->
-        code:add_patha(Path)
-    end, Paths),
-    {ok, _} = rpc:call(?NODE_TEST, cover, start, [[node()]]),
-    mnesia:stop(),
-    mnesia:delete_schema([node()]),
-    timer:sleep(500),
-    forseti:start_link(mnesia, Call, Nodes),
-    ParentPID ! ok,
-    receive ok -> ok end.
-
 start() ->
     net_kernel:start([?NODE_TEST, shortnames]),
-    slave:start(localhost, forseti_common:short_name(?NODE1)),
-    slave:start(localhost, forseti_common:short_name(?NODE2)),
-    slave:start(localhost, forseti_common:short_name(?NODE3)),
-    slave:start(localhost, forseti_common:short_name(?NODE_OFF)),
 
-    timer:sleep(1000),
     Call = {forseti_common, start_link, []},
-    Args = [self(), code:get_path(), Call, ?NODES_T],
+    Parent = self(),
+    Paths = code:get_path(),
     lists:foreach(fun(Node) ->
-        rpc:cast(Node, ?MODULE, init_forseti, Args),
-        timer:sleep(500)
-    end, nodes()),
-    [ receive ok -> ok end || _ <- lists:seq(1,3) ],
+        ShortName = forseti_common:short_name(Node),
+        slave:start(localhost, ShortName),
+        timer:sleep(500),
+        {ok, _} = cover:start(Node),
+        lists:foreach(fun(Path) ->
+            rpc:call(Node, code, add_pathz, [Path])
+        end, Paths),
+        spawn(Node, fun() ->
+            mnesia:stop(),
+            mnesia:delete_schema([node()]),
+            timer:sleep(500),
+            {ok, PID} = forseti:start_link(mnesia, Call, ?NODES_T),
+            Parent ! {ok, self(), PID},
+            receive ok -> ok end
+        end)
+    end, ?NODES_T),
+    lists:foreach(fun(_) ->
+        receive {ok, _InitPID, _PID} -> ok end
+    end, ?NODES_T),
+    % kill node off
     timer:sleep(500),
     slave:stop(?NODE_OFF),
+    timer:sleep(1000),
     ok.
 
 stop(_) ->
@@ -96,9 +97,7 @@ lock_test(_) ->
         spawn(fun() ->
             lists:foreach(fun(N) ->
                 Key = <<"delay",N/integer>>,
-                ?debugFmt("B> generating key = ~p~n", [Key]),
-                rpc:call(?NODE1, forseti, get_key, [Key]),
-                ?debugFmt("<B generated key = ~p~n", [Key])
+                rpc:call(?NODE1, forseti, get_key, [Key])
             end, lists:seq(1,4)),
             ParentPID ! ok
         end),
@@ -107,9 +106,7 @@ lock_test(_) ->
         Seq = lists:seq(1, 2),
         lists:foreach(fun(N) ->
             Key = <<"delay",N/integer>>,
-            ?debugFmt(">> request existent key = ~p~n", [Key]),
-            rpc:call(?NODE2, forseti, get_key, [Key]),
-            ?debugFmt("<< requested existent key = ~p~n", [Key])
+            rpc:call(?NODE2, forseti, get_key, [Key])
         end, Seq ++ Seq ++ Seq ++ Seq ++ Seq),
         ?assertEqual(undefined, rpc:call(?NODE3, forseti, search_key,
             [<<"delay",4/integer>>])),
@@ -120,7 +117,6 @@ lock_test(_) ->
         ((T1 * 1000000) + S1 + 10) > ((T2 * 1000000) + S2)
     end)},
     {timeout, 60, ?_assert(begin
-        ?debugFmt(" ** CLEANING processes...", []),
         lists:foreach(fun(N) ->
             Key = <<"delay",N/integer>>,
             {_Node,PID} = rpc:call(?NODE1, forseti, get_key, [Key]),
@@ -128,7 +124,6 @@ lock_test(_) ->
         end, lists:seq(1,4)),
         timer:sleep(1000),
         EmptyNodes = rpc:call(?NODE3, forseti, get_metrics, []),
-        ?debugFmt("metrics: ~p~n", [EmptyNodes]),
         0 =:= proplists:get_value(?NODE1, EmptyNodes) andalso
         0 =:= proplists:get_value(?NODE2, EmptyNodes) andalso
         0 =:= proplists:get_value(?NODE3, EmptyNodes)

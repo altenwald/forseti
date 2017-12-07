@@ -67,7 +67,6 @@ load_test(PROCESSES, NODE1, NODE2, NODE3) ->
         [ rpc:call(NODE1, forseti, get_key, [N]) || N <- lists:seq(1,PROCESSES) ],
         timer:sleep(1000),
         FullNodes = rpc:call(NODE1, forseti, get_metrics, []),
-        ?debugFmt("FullNodes: ~p~n", [FullNodes]),
         ?assertEqual((PROCESSES div 3), proplists:get_value(NODE1, FullNodes)),
         ?assertEqual((PROCESSES div 3), proplists:get_value(NODE2, FullNodes)),
         ?assertEqual((PROCESSES div 3), proplists:get_value(NODE3, FullNodes)),
@@ -84,7 +83,6 @@ load_test(PROCESSES, NODE1, NODE2, NODE3) ->
         end, lists:seq(1, PROCESSES)),
         timer:sleep(1000),
         EmptyNodes = rpc:call(NODE3, forseti, get_metrics, []),
-        ?debugFmt("metrics: ~p~n", [EmptyNodes]),
         ?assertEqual(0, proplists:get_value(NODE1, EmptyNodes)),
         ?assertEqual(0, proplists:get_value(NODE2, EmptyNodes)),
         ?assertEqual(0, proplists:get_value(NODE3, EmptyNodes)),
@@ -97,9 +95,7 @@ lock_test(NODE1, NODE2, NODE3) ->
         spawn(fun() ->
             lists:foreach(fun(N) ->
                 Key = <<"delay",N/integer>>,
-                ?debugFmt("B> generating key = ~p~n", [Key]),
-                rpc:call(NODE1, forseti, get_key, [Key]),
-                ?debugFmt("<B generated key = ~p~n", [Key])
+                rpc:call(NODE1, forseti, get_key, [Key])
             end, lists:seq(1,4)),
             ParentPID ! ok
         end),
@@ -108,9 +104,7 @@ lock_test(NODE1, NODE2, NODE3) ->
         Seq = lists:seq(1, 2),
         lists:foreach(fun(N) ->
             Key = <<"delay",N/integer>>,
-            ?debugFmt(">> request existent key = ~p~n", [Key]),
-            rpc:call(NODE1, forseti, get_key, [Key]),
-            ?debugFmt("<< requested existent key = ~p~n", [Key])
+            rpc:call(NODE1, forseti, get_key, [Key])
         end, Seq ++ Seq ++ Seq ++ Seq ++ Seq),
         ?assertEqual(undefined, rpc:call(NODE1, forseti, search_key, [<<"delay",4/integer>>])),
         T2 = os:timestamp(),
@@ -127,7 +121,6 @@ lock_test(NODE1, NODE2, NODE3) ->
         end, lists:seq(1,4)),
         timer:sleep(1000),
         EmptyNodes = rpc:call(NODE3, forseti, get_metrics, []),
-        ?debugFmt("metrics: ~p~n", [EmptyNodes]),
         0 =:= proplists:get_value(NODE1, EmptyNodes) andalso
         0 =:= proplists:get_value(NODE2, EmptyNodes) andalso
         0 =:= proplists:get_value(NODE3, EmptyNodes)

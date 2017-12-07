@@ -1,9 +1,11 @@
 language: erlang
 sudo: required
-script: "make compile test"
+script: "make test"
 install: "sudo pip install codecov"
 after_success: "codecov"
 otp_release:
+   - 20.1
+   - 20.0
    - 19.3
    - 19.2
    - 19.1
@@ -23,4 +25,3 @@ otp_release:
 notifications:
   slack:
     secure: R/DFvrTxdCqOtfQ9Fp9x21Dsd74nltDk98LR8Gq/hydJIR8IC6I62b8XLje74YFb0yjtXc6v3AIrZAu8WuLDn6fij+yGV0nRy4z3pZA2Sq9qN1QEZ2MYpRJWy36ZU4qf/ST3ZcUArIQr7hGslpSEJy7f6PhKajcU/5p97Ps3k2s=
-

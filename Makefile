@@ -1,29 +1,24 @@
+REBAR=./rebar3
+
 all: compile
 
-force-deps:
-	./rebar get-deps
-	./rebar update-deps
-	./rebar compile
-
 clean:
-	./rebar clean
-
-deps:
-	./rebar get-deps
-	./rebar compile
+	${REBAR} clean
+	-rm -rf _build
 
 doc:
-	./rebar doc skip_deps=true
+	${REBAR} as doc edoc
 
-compile: deps
-	./rebar compile skip_deps=true
+compile:
+	${REBAR} compile
 
-test: deps
-	./rebar eunit skip_deps=true
+test:
+	${REBAR} do eunit, cover
 	./covertool \
 		-cover .eunit/eunit.coverdata \
-		-appname ephp \
+		-appname forseti \
 		-output cobertura.xml
+	-rm -f forseti_leader_forseti*
+	-rm -rf Mnesia.forseti*
 
-.PHONY: doc test compile force-deps all
-
+.PHONY: doc test compile all

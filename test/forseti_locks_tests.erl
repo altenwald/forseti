@@ -1,18 +1,18 @@
--module(forseti_leader_test).
+-module(forseti_locks_tests).
 -compile([export_all]).
 
 -include_lib("eunit/include/eunit.hrl").
 
 -define(PROCESSES, 999).
 
--define(NODE_TEST, forseti_leader@localhost).
+-define(NODE_TEST, forseti_locks@localhost).
 
--define(NODE1, forseti1_leader@localhost).
--define(NODE2, forseti2_leader@localhost).
--define(NODE3, forseti3_leader@localhost).
--define(NODE_OFF, forseti_off_leader@localhost).
+-define(NODE1, forseti1_locks@localhost).
+-define(NODE2, forseti2_locks@localhost).
+-define(NODE3, forseti3_locks@localhost).
+-define(NODE_OFF, forseti_off_locks@localhost).
 
--define(NODES_T, [?NODE1, ?NODE2, ?NODE3, ?NODE_OFF]).
+-define(NODES_T, [?NODE1, ?NODE2, ?NODE3]).
 
 %% -- generator
 
@@ -32,27 +32,27 @@ generator_test_() ->
 
 %% -- initilizer and finisher
 
-init_forseti(ParentPID, Paths, Call, Nodes) ->
-    lists:foreach(fun(Path) ->
-        code:add_patha(Path)
-    end, Paths),
-    {ok, _} = rpc:call(?NODE_TEST, cover, start, [[node()]]),
-    {ok, PID} = forseti:start_link(gen_leader, Call, Nodes),
-    ParentPID ! {ok, self(), PID},
-    receive ok -> ok end.
-
 start() ->
     net_kernel:start([?NODE_TEST, shortnames]),
 
     Call = {forseti_common, start_link, []},
-    Args = [self(), code:get_path(), Call, ?NODES_T],
-    PIDs = lists:map(fun(Node) ->
+    Parent = self(),
+    Paths = code:get_path(),
+    lists:foreach(fun(Node) ->
         ShortName = forseti_common:short_name(Node),
         slave:start(localhost, ShortName),
         timer:sleep(500),
-        spawn(fun() ->
-            rpc:call(Node, ?MODULE, init_forseti, Args)
-        end),
+        {ok, _} = cover:start(Node),
+        lists:foreach(fun(Path) ->
+            rpc:call(Node, code, add_pathz, [Path])
+        end, Paths),
+        spawn(Node, fun() ->
+            {ok, PID} = forseti:start_link(locks, Call, ?NODES_T),
+            Parent ! {ok, self(), PID},
+            receive ok -> ok end
+        end)
+    end, ?NODES_T),
+    PIDs = lists:map(fun(_) ->
         receive {ok, InitPID, _PID} -> InitPID end
     end, ?NODES_T),
     % kill node off
@@ -66,6 +66,7 @@ stop(PIDs) ->
     [ PID ! ok || PID <- PIDs ],
     [ slave:stop(N) || N <- nodes() ],
     net_kernel:stop(),
+    timer:sleep(1000),
     ok.
 
 %% -- tests

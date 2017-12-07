@@ -6,5 +6,10 @@
         kernel, stdlib, mnesia, gen_leader
     ]},
     {mod, {forseti_app, []}},
-    {env, []}
+    {env, []},
+    {maintainers, ["Manuel Rubio"]},
+    {licenses, ["LGPL 2.1"]},
+    {links,[
+        {"Github","https://github.com/altenwald/forseti"}
+    ]}
 ]}.
