@@ -99,22 +99,6 @@ The new functions are <code>forseti:get/2</code>, <code>forseti:get/3</code> and
 
 Use only gen_server has several pros and cons so, I added more backends (with more pros and cons too) to let you decide what's the better implementation for your development.
 
-=== gen_leader ===
-
-The first backend I use. It's faster than others, hasn't got SPOF (Single Point Of Failure) but you need to shutdown the cluster to add new nodes. And you can only use <code>gen_leader</code> once by node. If you plan to use <code>gen_leader</code> for your specific implementation, you should use another backend.
-
-This backend is used by default so if you use the system as above, you're using it. But if you want to put in the configuration file or in the <code>start_link</code> function explicitly, you can do it as follow:
-
-<pre lang="erlang">forseti:start_link(gen_leader, Call, Nodes)</pre>
-
-Or in the configuration file:
-
-<pre lang="erlang">{forseti, [
-    {backend, gen_leader},
-    {nodes, [nodes()]},
-    {call, mfa()}
-]}</pre>
-
 === mnesia ===
 
 As is implemented in <code>ejabberd</code>, you can use <code>mnesia</code> as the store for the processes. This backend lets you add and remove nodes from the cluster without restart the whole cluster. The worst part is the latency. If you plan to use forseti for high load requesting location for processes, creating and removing processes, perhaps you should use another backend.

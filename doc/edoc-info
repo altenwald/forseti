@@ -1,5 +1,4 @@
 %% encoding: UTF-8
 {application,forseti}.
-{modules,[forseti,forseti_app,forseti_leader,forseti_leader_server,
-          forseti_lib,forseti_locks,forseti_locks_server,forseti_mnesia,
-          forseti_sup]}.
+{modules,[forseti,forseti_app,forseti_lib,forseti_locks,forseti_locks_server,
+          forseti_mnesia,forseti_sup]}.

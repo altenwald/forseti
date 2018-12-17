@@ -124,27 +124,6 @@ The new functions are `forseti:get/2`, `forseti:get/3` and `forseti:find/2`.
 Use only gen_server has several pros and cons so, I added more backends (with more pros and cons too) to let you decide what's the better implementation for your development.
 
 
-#### <a name="gen_leader">gen_leader</a> ####
-
-The first backend I use. It's faster than others, hasn't got SPOF (Single Point Of Failure) but you need to shutdown the cluster to add new nodes. And you can only use `gen_leader` once by node. If you plan to use `gen_leader` for your specific implementation, you should use another backend.
-
-This backend is used by default so if you use the system as above, you're using it. But if you want to put in the configuration file or in the `start_link` function explicitly, you can do it as follow:
-
-```erlang
-forseti:start_link(gen_leader, Call, Nodes)
-```
-
-Or in the configuration file:
-
-```erlang
-{forseti, [
-    {backend, gen_leader},
-    {nodes, [nodes()]},
-    {call, mfa()}
-]}
-```
-
-
 #### <a name="mnesia">mnesia</a> ####
 
 As is implemented in `ejabberd`, you can use `mnesia` as the store for the processes. This backend lets you add and remove nodes from the cluster without restart the whole cluster. The worst part is the latency. If you plan to use forseti for high load requesting location for processes, creating and removing processes, perhaps you should use another backend.
@@ -194,13 +173,11 @@ In configuration file:
 
 
 <table width="100%" border="0" summary="list of modules">
-<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti.md" class="module">forseti</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_app.md" class="module">forseti_app</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_leader.md" class="module">forseti_leader</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_leader_server.md" class="module">forseti_leader_server</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_lib.md" class="module">forseti_lib</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_locks.md" class="module">forseti_locks</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_locks_server.md" class="module">forseti_locks_server</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_mnesia.md" class="module">forseti_mnesia</a></td></tr>
-<tr><td><a href="http://github.com/altenwald/forseti/blob/master/doc/forseti_sup.md" class="module">forseti_sup</a></td></tr></table>
+<tr><td><a href="https://github.com/altenwald/forseti/blob/master/doc/forseti.md" class="module">forseti</a></td></tr>
+<tr><td><a href="https://github.com/altenwald/forseti/blob/master/doc/forseti_app.md" class="module">forseti_app</a></td></tr>
+<tr><td><a href="https://github.com/altenwald/forseti/blob/master/doc/forseti_lib.md" class="module">forseti_lib</a></td></tr>
+<tr><td><a href="https://github.com/altenwald/forseti/blob/master/doc/forseti_locks.md" class="module">forseti_locks</a></td></tr>
+<tr><td><a href="https://github.com/altenwald/forseti/blob/master/doc/forseti_locks_server.md" class="module">forseti_locks_server</a></td></tr>
+<tr><td><a href="https://github.com/altenwald/forseti/blob/master/doc/forseti_mnesia.md" class="module">forseti_mnesia</a></td></tr>
+<tr><td><a href="https://github.com/altenwald/forseti/blob/master/doc/forseti_sup.md" class="module">forseti_sup</a></td></tr></table>
 

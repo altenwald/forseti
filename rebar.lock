@@ -1,10 +1,8 @@
 {"1.1.0",
-[{<<"gen_leader">>,{pkg,<<"gen_leader">>,<<"0.1.0">>},0},
- {<<"locks">>,{pkg,<<"locks">>,<<"0.1.1">>},0},
+[{<<"locks">>,{pkg,<<"locks">>,<<"0.2.0">>},0},
  {<<"plain_fsm">>,{pkg,<<"plain_fsm">>,<<"1.4.1">>},1}]}.
 [
 {pkg_hash,[
- {<<"gen_leader">>, <<"4EFF42117A135191A4CBEEB3DC8F7A288197A3BA19D29FAD21EB301B62891A62">>},
- {<<"locks">>, <<"7F9B339375B9E11EB220B8664241F9F200035C734DC7309412451A796D50EBB0">>},
+ {<<"locks">>, <<"C8A5DB52BDBFACFCC979B38920ADB2AB8909FA7FB36015DDFF6B753D1C950B92">>},
  {<<"plain_fsm">>, <<"47E9BF6AC9322FC7586FB6DF8DE7198391E93764571C75165F2C45B27ACDE1D0">>}]}
 ].

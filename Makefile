@@ -18,7 +18,6 @@ test:
 		-cover .eunit/eunit.coverdata \
 		-appname forseti \
 		-output cobertura.xml
-	-rm -f forseti_leader_forseti*
 	-rm -rf Mnesia.forseti*
 
 .PHONY: doc test compile all

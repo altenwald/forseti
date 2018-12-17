@@ -38,11 +38,6 @@ init([Backend, MaxR, MaxT, Nodes]) ->
     Children = servers(Module, Nodes),
     {ok, {{one_for_all, MaxR, MaxT}, Children}}.
 
-servers(forseti_leader, Nodes) -> [
-    ?CHILD(forseti_leader_server, []),
-    ?CHILD(forseti_leader, [Nodes])
-];
-
 servers(forseti_locks, Nodes) -> [
     ?CHILD(forseti_locks_server, []),
     ?CHILD(forseti_locks, [Nodes])
